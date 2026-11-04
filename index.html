@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>프롬프트 보관함</title>
+<meta name="description" content="자주 쓰는 AI 프롬프트를 변수와 함께 보관하고, 값을 채워 바로 복사하는 개인 프롬프트 라이브러리.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script>try{var t=localStorage.getItem('pv-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body>
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+<header class="hero">
+  <div class="orb orb-1" aria-hidden="true"></div>
+  <div class="orb orb-2" aria-hidden="true"></div>
+  <div class="orb orb-3" aria-hidden="true"></div>
+  <div class="grid-bg" aria-hidden="true"></div>
+  <div class="wrap hero-inner">
+    <div class="topbar">
+      <span class="brand"><span class="logo" aria-hidden="true">{{ }}</span>프롬프트 보관함</span>
+      <button id="themeBtn" class="btn ghost sm" type="button" aria-label="테마 전환">테마 전환</button>
+    </div>
+    <h1>자주 쓰는 프롬프트,<br><span class="grad">빈칸만 채워 바로 복사</span></h1>
+    <p class="lead">{{변수}}로 비워 둔 자리에 값을 넣으면 완성된 프롬프트가 실시간으로 만들어져요.</p>
+    <div class="hero-actions">
+      <button id="newBtn" class="btn primary" type="button">새 프롬프트</button>
+      <button id="demoBtn" class="btn ghost" type="button">예시 데이터 불러오기</button>
+    </div>
+    <p class="stats" id="stats" aria-live="polite"></p>
+  </div>
+</header>
+
+<main id="main" class="wrap layout">
+  <section class="pane list-pane" aria-labelledby="listTitle">
+    <h2 id="listTitle" class="sr">프롬프트 목록</h2>
+    <div class="controls">
+      <label class="field grow"><span class="sr">검색</span>
+        <input id="search" type="search" placeholder="제목, 태그, 본문 검색" autocomplete="off">
+      </label>
+      <label class="field"><span class="sr">정렬</span>
+        <select id="sort">
+          <option value="recent">최근 사용</option>
+          <option value="count">많이 쓴 순</option>
+          <option value="newest">최신 등록</option>
+        </select>
+      </label>
+    </div>
+    <div id="tagBar" class="chips" role="group" aria-label="태그 필터"></div>
+    <ul id="list" class="cards"></ul>
+    <div id="empty" class="empty" hidden>
+      <p id="emptyMsg"></p>
+    </div>
+    <div class="tools">
+      <button id="exportBtn" class="btn ghost sm" type="button">JSON 내보내기</button>
+      <button id="importBtn" class="btn ghost sm" type="button">JSON 가져오기</button>
+      <button id="clearBtn" class="btn danger sm" type="button">전체 삭제</button>
+      <input id="importFile" type="file" accept="application/json,.json" hidden>
+    </div>
+  </section>
+
+  <section class="pane detail-pane" id="detail" aria-labelledby="detailTitle" tabindex="-1">
+    <div id="detailEmpty" class="detail-empty">
+      <div class="big" aria-hidden="true">✦</div>
+      <h2>프롬프트를 선택해 보세요</h2>
+      <p>왼쪽 목록에서 프롬프트를 고르면 변수 입력 폼과 미리보기가 여기에 나타나요.</p>
+    </div>
+    <article id="detailBody" hidden>
+      <div class="detail-head">
+        <button id="backBtn" class="btn ghost sm back" type="button">목록으로</button>
+        <div class="detail-actions">
+          <button id="editBtn" class="btn ghost sm" type="button">수정</button>
+          <button id="delBtn" class="btn danger sm" type="button">삭제</button>
+        </div>
+      </div>
+      <h2 id="detailTitle"></h2>
+      <div id="detailMeta" class="meta"></div>
+      <div id="detailTags" class="chips"></div>
+      <h3>원문</h3>
+      <pre id="rawBody" class="code"></pre>
+      <h3>채우기</h3>
+      <form id="fillForm" class="fill" autocomplete="off"></form>
+      <p id="noVars" class="muted" hidden>이 프롬프트에는 변수가 없어요. 그대로 복사하면 돼요.</p>
+      <h3>미리보기</h3>
+      <pre id="preview" class="code preview" aria-live="polite"></pre>
+      <div class="copy-row">
+        <button id="copyBtn" class="btn primary" type="button">클립보드에 복사</button>
+        <button id="resetBtn" class="btn ghost" type="button">입력 초기화</button>
+      </div>
+    </article>
+  </section>
+</main>
+
+<footer class="wrap foot">데이터는 이 브라우저(localStorage)에만 저장돼요. 정기적으로 JSON으로 내보내 백업하세요.</footer>
+
+<dialog id="modal" class="modal" aria-labelledby="modalTitle">
+  <form id="editForm" novalidate>
+    <h2 id="modalTitle">새 프롬프트</h2>
+    <label class="field"><span>제목</span>
+      <input id="fTitle" name="title" type="text" maxlength="80" required aria-describedby="eTitle">
+      <small id="eTitle" class="err" role="alert"></small></label>
+    <label class="field"><span>태그 <em>(쉼표로 구분)</em></span>
+      <input id="fTags" name="tags" type="text" placeholder="글쓰기, 블로그" aria-describedby="eTags">
+      <small id="eTags" class="err" role="alert"></small></label>
+    <label class="field"><span>본문 <em>({{변수}} 형태로 빈칸 만들기)</em></span>
+      <textarea id="fBody" name="body" rows="9" required aria-describedby="eBody"></textarea>
+      <small id="eBody" class="err" role="alert"></small></label>
+    <p class="muted" id="varHint"></p>
+    <div class="modal-actions">
+      <button type="button" id="cancelBtn" class="btn ghost">취소</button>
+      <button type="submit" class="btn primary">저장</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="confirm" class="modal small" aria-labelledby="confirmTitle">
+  <form method="dialog">
+    <h2 id="confirmTitle">확인</h2>
+    <p id="confirmMsg"></p>
+    <div class="modal-actions">
+      <button value="cancel" class="btn ghost">취소</button>
+      <button value="ok" class="btn danger" id="confirmOk">확인</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
