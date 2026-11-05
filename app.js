@@ -66,7 +66,7 @@ function fmtTime(ts) {
 function tagChip(t) { const c = el('span', { class: 'chip', text: '#' + t }); c.style.setProperty('--h', hueOf(t)); return c; }
 function tagFilterBtn(t) {
   const c = el('button', { class: 'chip', type: 'button', 'aria-pressed': String(state.tag === t), title: '이 태그로 필터', text: '#' + t,
-    onclick: () => { state.tag = state.tag === t ? '' : t; layout().classList.remove('show-detail'); render(); } });
+    onclick: () => { state.tag = state.tag === t ? '' : t; layout().classList.remove('show-detail'); render(); focusEl(`#tagBar [data-tag="${CSS.escape(t)}"]`); } });
   c.style.setProperty('--h', hueOf(t));
   return c;
 }
@@ -220,7 +220,8 @@ function renderPreview() {
   const p = current(); if (!p) return;
   highlight($('preview'), p.body, state.values);
   const s = textStats(renderTemplate(p.body, state.values));
-  $('countInfo').textContent = `${fmtNum(s.chars)}자 · 약 ${fmtNum(s.tokens)} 토큰 (추정)`;
+  const blanks = extractVariables(p.body).filter((n) => !(typeof state.values[n] === 'string' && state.values[n] !== '')).length;
+  $('countInfo').textContent = `${fmtNum(s.chars)}자 · 약 ${fmtNum(s.tokens)} 토큰 (추정)` + (blanks ? ` · 빈칸 ${blanks}개` : '');
 }
 
 /* test-run notes */

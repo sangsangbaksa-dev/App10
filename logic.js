@@ -155,6 +155,8 @@ export function diffLines(a, b) {
   const y = String(b ?? '').split('\n');
   const n = x.length, m = y.length;
   const out = [];
+  // Identical texts are all "same", even when too large for the LCS table below.
+  if (String(a ?? '') === String(b ?? '')) return x.map((text) => ({ type: 'same', text }));
   if (n * m > 4000000) {
     for (const t of x) out.push({ type: 'del', text: t });
     for (const t of y) out.push({ type: 'add', text: t });
