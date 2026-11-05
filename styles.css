@@ -411,3 +411,32 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
   .site-nav a { flex: 0 0 auto; }
 }
 @media (prefers-reduced-motion: reduce) { .site-nav a { transition: none; } }
+
+/* ---------- direction pass: deep green primary, navy ink, serif display, large radius ---------- */
+:root{
+  --bg:#F8FAFC; --panel:#ffffff; --surface-2:#F1F5F9; --ink:#0A1628; --muted:#4B5A6E; --line:#DCE4EE; --line-strong:#B9C6D6;
+  --accent:#0B6E4F; --accent-hover:#064D36; --accent-ink:#ffffff; --accent-soft:rgba(11,110,79,.10); --focus:#0B6E4F;
+  --income:#0B6E4F; --radius:20px; --radius-sm:12px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0A1628; --panel:#11203A; --surface-2:#162948; --ink:#E8EEF5; --muted:#9AA9BD; --line:#22344F; --line-strong:#2F4566;
+    --accent:#4FCB9B; --accent-hover:#7FE0BA; --accent-ink:#06241A; --accent-soft:rgba(79,203,155,.16); --focus:#7FE0BA;
+    --income:#4FCB9B; --toast-bg:#E8EEF5; --toast-ink:#0A1628;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0A1628; --panel:#11203A; --surface-2:#162948; --ink:#E8EEF5; --muted:#9AA9BD; --line:#22344F; --line-strong:#2F4566;
+  --accent:#4FCB9B; --accent-hover:#7FE0BA; --accent-ink:#06241A; --accent-soft:rgba(79,203,155,.16); --focus:#7FE0BA;
+  --income:#4FCB9B; --toast-bg:#E8EEF5; --toast-ink:#0A1628;
+}
+h1,h2{font-family:Georgia,"Times New Roman","Noto Serif KR",serif;font-weight:700;letter-spacing:-.01em}
+.card,.panel{border-radius:var(--radius)}
+.btn-cta{display:inline-flex;align-items:center;min-height:44px;padding:0 18px;border-radius:999px;background:var(--accent);color:var(--accent-ink);text-decoration:none;font-weight:700;font-size:.92rem;margin-left:8px;transition:background-color .15s ease,box-shadow .15s ease}
+.btn-cta:hover{background:var(--accent-hover);box-shadow:0 8px 20px rgba(11,110,79,.25)}
+button.primary{border-radius:999px}
+button.primary{background:var(--accent);color:var(--accent-ink)}
+button.primary:hover:not(:disabled){background:var(--accent-hover)}
+.sitebar-in .site-nav{margin-left:auto}
+@media (max-width:480px){ .btn-cta{order:2;margin-left:auto} .site-nav{order:3} }
+@media (max-width:480px){ .sitebar-in{padding-top:8px;padding-bottom:8px;row-gap:4px;align-items:center} .btn-cta{min-height:40px} }
