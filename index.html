@@ -77,6 +77,25 @@
     </div>
   </section>
 
+  <section class="panel ai" id="ai-panel" aria-labelledby="ai-h">
+    <h2 id="ai-h">AI 분석 <span class="hint">(선택 기능)</span></h2>
+    <p class="ai-mode" id="ai-mode"></p>
+    <div class="ai-body" id="ai-body"></div>
+    <div class="row-btns">
+      <button type="button" class="primary" id="ai-run">AI로 분석하기</button>
+    </div>
+    <p class="hint" id="ai-status" role="status"></p>
+    <details class="ai-key">
+      <summary>API 키 설정</summary>
+      <p class="hint">본인의 Anthropic API 키를 붙여넣으면 AI가 적립 상황을 쉽게 설명하고 매달 적립액을 제안합니다. 키는 이 브라우저의 localStorage에만 저장되며, api.anthropic.com으로만 전송됩니다. 보내는 내용은 연도별 금액 합계와 상위 거래처 이름뿐입니다. 키가 없어도 기본 분석은 계속 보입니다.</p>
+      <label>API 키 <input type="password" id="ai-key-input" autocomplete="off" spellcheck="false" placeholder="sk-ant-..."></label>
+      <div class="row-btns">
+        <button type="button" id="ai-key-save">키 저장</button>
+        <button type="button" id="ai-key-clear" class="danger">키 삭제</button>
+      </div>
+    </details>
+  </section>
+
   <section class="panel actions">
     <button id="export" type="button">CSV 내보내기</button>
     <button id="clear" type="button" class="danger">전체 기록 삭제</button>

@@ -1,18 +1,28 @@
 import {
+  AI_MODEL,
   DEFAULT_RATE_PCT,
+  buildTaxPrompt,
   clampPct,
   daysUntil,
+  extractMessageText,
   filingDeadlineFor,
+  localTaxAdvice,
   monthlyBreakdown,
+  monthsLeftIn,
   parseAmount,
+  parseTaxAdvice,
   sanitizeEntries,
   sanitizeEntry,
   summarize,
   toCSV,
+  topClients,
   yearsOf,
 } from './logic.js';
 
 const KEY = 'taxreserve-v1';
+// AI 키는 이 브라우저의 localStorage에만 둡니다. 사용자가 직접 붙여넣은 키만 쓰며, api.anthropic.com 외에는 보내지 않습니다.
+const AI_KEY = 'app10-ai-key';
+let aiResult = null; // { year, sig, data }: 마지막 AI 분석 결과와 그때의 입력 서명
 const $ = (sel) => document.querySelector(sel);
 const won = (n) => `${Number(n).toLocaleString('ko-KR')}원`;
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -180,7 +190,190 @@ function render() {
   renderDeadline();
   renderRows(yearEntries);
   renderMonthly(yearEntries);
+  renderAi(yearEntries);
 }
+
+// ── AI 분석 ──
+function getAiKey() {
+  try {
+    return (localStorage.getItem(AI_KEY) || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function setAiKey(v) {
+  try {
+    localStorage.setItem(AI_KEY, v);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearAiKey() {
+  try {
+    localStorage.removeItem(AI_KEY);
+  } catch {
+    // 저장소에 접근할 수 없으면 지울 것도 없습니다.
+  }
+}
+
+// 입력(연도, 합계, 적립률, 남은 달, 거래처)이 바뀌었는지 비교하는 서명
+function aiInput(yearEntries) {
+  const s = summarize(yearEntries, state.ratePct);
+  const opts = {
+    year,
+    ratePct: state.ratePct,
+    monthsLeft: monthsLeftIn(year, new Date()),
+    clients: topClients(yearEntries, 3),
+  };
+  return { s, opts, sig: JSON.stringify([s, opts]) };
+}
+
+function renderAi(yearEntries) {
+  const { s, opts, sig } = aiInput(yearEntries);
+  const hasAi = aiResult && aiResult.year === year && aiResult.sig === sig;
+  const stale = aiResult && aiResult.year === year && aiResult.sig !== sig;
+  const adv = hasAi ? aiResult.data : localTaxAdvice(s, opts);
+
+  $('#ai-mode').textContent = hasAi
+    ? `AI 분석 결과 · ${AI_MODEL} · 참고용 추정치`
+    : '기본 분석 · 이 기기에서 계산 (키 없이도 동작)';
+
+  const body = $('#ai-body');
+  const nodes = [];
+  if (!yearEntries.length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = `${year}년 기록이 없어 분석할 내용이 없습니다.`;
+    nodes.push(p);
+  } else {
+    const p = document.createElement('p');
+    p.className = 'ai-text';
+    p.textContent = adv.explanation;
+    const m = document.createElement('p');
+    m.className = 'ai-monthly';
+    m.textContent = `매달 적립 권장액: ${won(adv.monthly)}`;
+    const ul = document.createElement('ul');
+    ul.className = 'ai-tips';
+    for (const t of adv.tips) {
+      const li = document.createElement('li');
+      li.textContent = t;
+      ul.append(li);
+    }
+    nodes.push(p, m, ul);
+  }
+  if (stale) {
+    const note = document.createElement('p');
+    note.className = 'hint';
+    note.textContent = '기록이 바뀌어 이전 AI 결과는 숨겼습니다. 다시 분석하면 최신 내용으로 갱신됩니다.';
+    nodes.push(note);
+  }
+  body.replaceChildren(...nodes);
+
+  const runBtn = $('#ai-run');
+  runBtn.textContent = getAiKey() ? 'AI로 분석하기' : 'AI로 분석하기 (키 필요)';
+}
+
+// Messages API를 브라우저에서 직접 호출합니다. 오류는 status 속성을 붙여 던집니다.
+async function askClaude(key, system, user) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 30000);
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        max_tokens: 600,
+        system,
+        messages: [{ role: 'user', content: user }],
+      }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      const err = new Error(`HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return extractMessageText(await res.json());
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function aiErrorText(err) {
+  if (err && err.name === 'AbortError') return '응답이 30초를 넘어 중단했습니다. 다시 시도하세요. 기본 분석은 그대로 볼 수 있습니다.';
+  if (err && err.status === 401) return 'API 키가 올바르지 않습니다. 키를 다시 확인하세요.';
+  if (err && err.status === 429) return '요청 한도를 넘었습니다. 잠시 뒤 다시 시도하세요.';
+  if (err && err.status) return `AI 요청이 실패했습니다(HTTP ${err.status}). 기본 분석을 이용하세요.`;
+  if (err && err.message === 'format') return 'AI 응답 형식을 해석하지 못했습니다. 기본 분석을 이용하세요.';
+  return '네트워크 오류로 AI 분석에 실패했습니다. 기본 분석을 이용하세요.';
+}
+
+async function runAi() {
+  const status = $('#ai-status');
+  const key = getAiKey();
+  if (!key) {
+    status.textContent = '먼저 아래 "API 키 설정"에서 본인의 키를 저장하세요.';
+    $('.ai-key').open = true;
+    return;
+  }
+  const yearEntries = state.entries.filter((e) => e.date.startsWith(year));
+  if (!yearEntries.length) {
+    status.textContent = `${year}년 기록이 없어 분석할 수 없습니다.`;
+    return;
+  }
+  const { s, opts, sig } = aiInput(yearEntries);
+  const prompt = buildTaxPrompt(s, opts);
+  const startYear = year;
+  const btn = $('#ai-run');
+  btn.disabled = true;
+  status.textContent = 'AI가 분석하는 중입니다…';
+  try {
+    const data = parseTaxAdvice(await askClaude(key, prompt.system, prompt.user));
+    if (!data) throw new Error('format');
+    aiResult = { year: startYear, sig, data };
+    status.textContent = '분석을 마쳤습니다. 결과는 참고용 추정치입니다.';
+  } catch (err) {
+    status.textContent = aiErrorText(err);
+  } finally {
+    btn.disabled = false;
+    render();
+  }
+}
+
+$('#ai-run').addEventListener('click', runAi);
+
+$('#ai-key-save').addEventListener('click', () => {
+  const input = $('#ai-key-input');
+  const v = input.value.trim();
+  if (!/^sk-[\x21-\x7e]{10,}$/.test(v)) {
+    toast('Anthropic API 키 형식(sk-…)이 아닙니다.');
+    return;
+  }
+  if (!setAiKey(v)) {
+    toast('브라우저 저장소에 저장하지 못했습니다.');
+    return;
+  }
+  input.value = '';
+  $('#ai-status').textContent = 'API 키를 이 브라우저에 저장했습니다.';
+  render();
+});
+
+$('#ai-key-clear').addEventListener('click', () => {
+  clearAiKey();
+  $('#ai-key-input').value = '';
+  aiResult = null;
+  $('#ai-status').textContent = 'API 키를 삭제했습니다. 기본 분석만 보입니다.';
+  render();
+});
 
 function syncWithheldRow() {
   const isIncome = form.elements.type.value === 'income';
