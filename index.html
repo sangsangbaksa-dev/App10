@@ -3,141 +3,215 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>세금적립</title>
-<meta name="description" content="프리랜서 수입과 경비를 기록하고, 종합소득세 적립 목표와 원천징수 차감분을 추정합니다.">
-<meta name="theme-color" content="#0B6E4F" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0A1628" media="(prefers-color-scheme: dark)">
-<meta property="og:type" content="website">
-<meta property="og:title" content="세금적립">
-<meta property="og:description" content="수입과 경비를 기록하면 세금 적립 목표와 추가 적립액을 자동으로 계산해 드려요.">
-<meta property="og:locale" content="ko_KR">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230B6E4F'/%3E%3Cpath d='M8 20.5h16' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3Cpath d='M10 16.5h12' stroke='%236ee7b7' stroke-width='2.6' stroke-linecap='round'/%3E%3Cpath d='M12 12.5h8' stroke='%23ffd36e' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<title>프롬프트 보관함</title>
+<meta name="description" content="자주 쓰는 AI 프롬프트를 변수와 함께 보관하고, 값을 채워 바로 복사하는 개인 프롬프트 라이브러리.">
+<meta name="color-scheme" content="light dark">
 <link rel="stylesheet" href="styles.css">
+<script>try{var t=localStorage.getItem('pv-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
 </head>
 <body>
-<div class="sitebar">
-  <div class="sitebar-in">
-    <a class="brand" href="#top" aria-label="세금적립 홈"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="9" fill="#0B6E4F"/><path d="M8 20.5h16" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M10 16.5h12" stroke="#6ee7b7" stroke-width="2.6" stroke-linecap="round" opacity=".9"/><path d="M12 12.5h8" stroke="#ffd36e" stroke-width="2.6" stroke-linecap="round"/></svg><span>세금적립</span></a>
-    <nav class="site-nav" aria-label="주요 메뉴">
-      <a href="#summary">요약</a>
-      <a href="#entry">기록하기</a>
-      <a href="#records">기록 목록</a>
-      <a href="#ai-panel">AI 분석</a>
-    </nav>
-    <a class="btn-cta" href="#entry">기록 추가</a>
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+<header class="hero">
+  <div class="orb orb-1" aria-hidden="true"></div>
+  <div class="orb orb-2" aria-hidden="true"></div>
+  <div class="grid-bg" aria-hidden="true"></div>
+  <div class="wrap hero-inner">
+    <div class="topbar">
+      <span class="brand"><span class="logo" aria-hidden="true">{{ }}</span>프롬프트 보관함</span>
+      <div class="topbar-actions">
+        <button id="helpBtn" class="btn ghost sm" type="button" aria-haspopup="dialog">단축키 ?</button>
+        <button id="themeBtn" class="btn ghost sm" type="button">다크 모드</button>
+      </div>
+    </div>
+    <h1>자주 쓰는 프롬프트,<br><span class="grad">빈칸만 채워 바로 복사</span></h1>
+    <p class="lead">{{변수}}로 비워 둔 자리에 값을 넣으면 완성된 프롬프트가 실시간으로 만들어져요.</p>
+    <div class="hero-actions">
+      <button id="newBtn" class="btn primary" type="button">새 프롬프트</button>
+      <button id="demoBtn" class="btn ghost" type="button">예시 데이터 불러오기</button>
+    </div>
+    <p class="stats" id="stats" aria-live="polite"></p>
   </div>
-</div>
-
-<header class="top" id="top">
-  <div>
-    <p class="eyebrow">프리랜서 세금 적립 계산기</p>
-    <h1>세금 걱정은 미리 모아 두세요</h1>
-    <p class="sub">수입과 경비를 기록하면 세금 적립 목표를 자동으로 계산합니다.</p>
-  </div>
-  <label class="year">기준 연도 <select id="year-sel"></select></label>
 </header>
 
-<main>
-  <section class="cards" id="summary" aria-label="요약">
-    <article class="card"><span>총수입</span><strong id="s-income">0원</strong></article>
-    <article class="card"><span>총경비</span><strong id="s-expense">0원</strong></article>
-    <article class="card"><span>순수입</span><strong id="s-net">0원</strong></article>
-    <article class="card accent"><span>적립 목표</span><strong id="s-target">0원</strong><small id="s-rate-note"></small></article>
-    <article class="card"><span>원천징수 누계</span><strong id="s-withheld">0원</strong></article>
-    <article class="card warn"><span>추가 적립 필요</span><strong id="s-gap">0원</strong></article>
+<main id="main" class="wrap layout">
+  <section class="pane list-pane" aria-labelledby="listTitle">
+    <h2 id="listTitle" class="sr" tabindex="-1">프롬프트 목록</h2>
+    <div class="controls">
+      <label class="field grow"><span class="sr">검색</span>
+        <input id="search" type="search" placeholder="제목, 태그, 본문 검색 (/ 키로 바로 이동)" autocomplete="off">
+      </label>
+      <label class="field"><span class="sr">정렬</span>
+        <select id="sort">
+          <option value="recent">최근 복사순</option>
+          <option value="count">많이 쓴 순</option>
+          <option value="newest">최신 등록순</option>
+          <option value="title">제목순 (가나다)</option>
+        </select>
+      </label>
+    </div>
+    <div class="filter-row">
+      <button id="favFilter" class="chip filter" type="button" aria-pressed="false">★ 즐겨찾기만</button>
+      <div id="tagBar" class="chips" role="group" aria-label="태그 필터"></div>
+    </div>
+    <div id="bulkBar" class="bulk-bar" hidden>
+      <span id="bulkCount" class="bulk-count" aria-live="polite">0개 선택됨</span>
+      <div class="bulk-actions">
+        <button id="bulkAllBtn" class="btn ghost sm" type="button">보이는 항목 모두 선택</button>
+        <button id="bulkClearBtn" class="btn ghost sm" type="button">선택 해제</button>
+        <button id="bulkExportBtn" class="btn ghost sm" type="button">선택 내보내기</button>
+        <button id="bulkDelBtn" class="btn danger sm" type="button" disabled>선택 삭제</button>
+      </div>
+    </div>
+    <ul id="list" class="cards"></ul>
+    <div id="empty" class="empty" hidden>
+      <svg class="art" viewBox="0 0 160 120" aria-hidden="true" focusable="false">
+        <rect class="a1" x="30" y="22" width="100" height="72" rx="14"/>
+        <rect class="a2" x="46" y="40" width="68" height="6" rx="3"/>
+        <rect class="a2" x="46" y="54" width="52" height="6" rx="3"/>
+        <rect class="a2" x="46" y="68" width="60" height="6" rx="3"/>
+        <circle class="a4" cx="120" cy="30" r="14"/>
+        <path class="a5" d="M120 22 l2 6 6 2 -6 2 -2 6 -2 -6 -6 -2 6 -2z"/>
+      </svg>
+      <p id="emptyMsg"></p>
+      <button id="emptyDemo" class="btn ghost sm" type="button">예시 데이터 불러오기</button>
+    </div>
+    <div class="tools">
+      <button id="bulkToggle" class="btn ghost sm" type="button" aria-pressed="false">여러 개 선택</button>
+      <button id="exportBtn" class="btn ghost sm" type="button">JSON 내보내기</button>
+      <button id="importBtn" class="btn ghost sm" type="button">JSON 가져오기</button>
+      <button id="clearBtn" class="btn danger sm" type="button">전체 삭제</button>
+      <input id="importFile" type="file" accept="application/json,.json" hidden>
+    </div>
   </section>
 
-  <section class="deadline panel" id="deadline"></section>
-
-  <div class="grid">
-    <section class="panel" id="entry">
-      <h2 id="form-title">수입·경비 기록</h2>
-      <form id="entry-form" class="form" autocomplete="off">
-        <div class="seg" role="radiogroup" aria-label="구분">
-          <label><input type="radio" name="type" value="income" checked><span>수입</span></label>
-          <label><input type="radio" name="type" value="expense"><span>경비</span></label>
+  <section class="pane detail-pane" id="detail" aria-labelledby="detailTitle" tabindex="-1">
+    <div id="detailEmpty" class="detail-empty">
+      <svg class="art" viewBox="0 0 160 120" aria-hidden="true" focusable="false">
+        <rect class="a1" x="30" y="22" width="100" height="72" rx="14"/>
+        <rect class="a2" x="46" y="40" width="68" height="6" rx="3"/>
+        <rect class="a2" x="46" y="54" width="52" height="6" rx="3"/>
+        <rect class="a2" x="46" y="68" width="60" height="6" rx="3"/>
+        <circle class="a4" cx="120" cy="30" r="14"/>
+        <path class="a5" d="M120 22 l2 6 6 2 -6 2 -2 6 -2 -6 -6 -2 6 -2z"/>
+      </svg>
+      <h2>프롬프트를 선택해 보세요</h2>
+      <p>왼쪽 목록에서 프롬프트를 고르면 변수 입력 폼과 미리보기가 여기에 나타나요.</p>
+    </div>
+    <article id="detailBody" hidden>
+      <div class="detail-head">
+        <button id="backBtn" class="btn ghost sm back" type="button">목록으로</button>
+        <div class="detail-actions">
+          <button id="favBtn" class="btn ghost sm" type="button" aria-pressed="false">☆ 즐겨찾기</button>
+          <button id="editBtn" class="btn ghost sm" type="button">수정</button>
+          <button id="dupBtn" class="btn ghost sm" type="button">복제</button>
+          <button id="mdBtn" class="btn ghost sm" type="button">Markdown</button>
+          <button id="delBtn" class="btn danger sm" type="button">삭제</button>
         </div>
-        <label>날짜 <input type="date" name="date" required></label>
-        <label>금액(원) <input type="text" inputmode="numeric" name="amount" placeholder="예: 1,500,000" required></label>
-        <label>거래처 / 항목 <input type="text" name="client" maxlength="80"></label>
-        <label>메모 <input type="text" name="memo" maxlength="200"></label>
-        <label class="check" id="withheld-row"><input type="checkbox" name="withheld"> 3.3% 원천징수 된 수입</label>
-        <div class="row-btns">
-          <button type="submit" class="primary" id="submit-btn">추가</button>
-          <button type="button" id="cancel-edit" hidden>수정 취소</button>
+      </div>
+      <h2 id="detailTitle"></h2>
+      <div id="detailMeta" class="meta"></div>
+      <div id="detailTags" class="chips"></div>
+      <h3>원문</h3>
+      <pre id="rawBody" class="code"></pre>
+      <h3>채우기</h3>
+      <form id="fillForm" class="fill" autocomplete="off"></form>
+      <p id="noVars" class="muted" hidden>이 프롬프트에는 변수가 없어요. 그대로 복사하면 돼요.</p>
+      <div class="preview-head">
+        <h3>미리보기</h3>
+        <span id="countInfo" class="muted" aria-live="off"></span>
+      </div>
+      <pre id="preview" class="code preview" aria-live="polite"></pre>
+      <div class="copy-row">
+        <button id="copyBtn" class="btn primary" type="button">클립보드에 복사</button>
+        <button id="resetBtn" class="btn ghost" type="button">입력 초기화</button>
+      </div>
+
+      <h3>테스트 기록</h3>
+      <form id="runForm" class="runform" autocomplete="off">
+        <label class="field"><span>모델 이름 <em>(직접 입력)</em></span>
+          <input id="runModel" type="text" maxlength="40" placeholder="예: my-model-name">
+        </label>
+        <label class="field"><span>결과 메모</span>
+          <textarea id="runResult" rows="3" maxlength="2000" placeholder="이 프롬프트로 받은 결과나 느낀 점"></textarea>
+        </label>
+        <p id="runErr" class="err" role="alert"></p>
+        <div class="copy-row">
+          <button id="runAddBtn" class="btn ghost sm" type="submit">기록 추가</button>
         </div>
       </form>
-      <div class="settings">
-        <label>적립률(%) <input type="number" id="rate" min="0" max="60" step="0.5"></label>
-        <p class="hint">순수입에 곱해 적립 목표를 구합니다. 기본 15%는 예시일 뿐이며, 실제 세율은 세무 전문가와 확인하세요.</p>
-      </div>
-    </section>
+      <p id="runEmpty" class="muted">아직 테스트 기록이 없어요.</p>
+      <ul id="runList" class="runs"></ul>
 
-    <section class="panel" id="records">
-      <div class="list-head">
-        <h2>기록 목록</h2>
-        <label>월 <select id="month-sel"></select></label>
+      <h3>버전 기록</h3>
+      <div id="verBox" hidden>
+        <div class="diff-controls">
+          <label class="field"><span>A 버전 <em>(복원할 기준)</em></span><select id="diffA"></select></label>
+          <label class="field"><span>B 버전</span><select id="diffB"></select></label>
+        </div>
+        <p id="diffSum" class="muted" aria-live="polite"></p>
+        <pre id="diffOut" class="code diff" aria-label="버전 비교 결과"></pre>
+        <div class="copy-row">
+          <button id="restoreBtn" class="btn ghost sm" type="button">A 버전으로 복원</button>
+        </div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>날짜</th><th>구분</th><th class="num">금액</th><th>거래처 / 메모</th><th></th></tr></thead>
-          <tbody id="rows"></tbody>
-        </table>
-      </div>
-      <p id="empty" class="hint" hidden>선택한 기간에 기록이 없습니다.</p>
-    </section>
-  </div>
-
-  <section class="panel">
-    <h2>월별 집계 <span class="hint">(행을 누르면 그 달만 봅니다)</span></h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>월</th><th class="num">수입</th><th class="num">경비</th><th class="num">순수입</th></tr></thead>
-        <tbody id="monthly"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="panel ai" id="ai-panel" aria-labelledby="ai-h">
-    <h2 id="ai-h">AI 분석 <span class="hint">(선택 기능)</span></h2>
-    <p class="ai-mode" id="ai-mode"></p>
-    <div class="ai-body" id="ai-body"></div>
-    <div class="row-btns">
-      <button type="button" class="primary" id="ai-run">AI로 분석하기</button>
-    </div>
-    <p class="hint" id="ai-status" role="status"></p>
-    <details class="ai-key">
-      <summary>API 키 설정</summary>
-      <p class="hint">본인의 Anthropic API 키를 붙여넣으면 AI가 적립 상황을 쉽게 설명하고 매달 적립액을 제안합니다. 키는 이 브라우저의 localStorage에만 저장되며, api.anthropic.com으로만 전송됩니다. 보내는 내용은 연도별 금액 합계와 상위 거래처 이름뿐입니다. 키가 없어도 기본 분석은 계속 보입니다.</p>
-      <label>API 키 <input type="password" id="ai-key-input" autocomplete="off" spellcheck="false" placeholder="sk-ant-..."></label>
-      <div class="row-btns">
-        <button type="button" id="ai-key-save">키 저장</button>
-        <button type="button" id="ai-key-clear" class="danger">키 삭제</button>
-      </div>
-    </details>
-  </section>
-
-  <section class="panel actions">
-    <button id="export" type="button">CSV 내보내기</button>
-    <button id="clear" type="button" class="danger">전체 기록 삭제</button>
+      <p id="verEmpty" class="muted" hidden>아직 저장된 이전 버전이 없어요. 수정하면 바뀌기 전 내용이 여기에 남아요 (최근 5개).</p>
+    </article>
   </section>
 </main>
 
-<footer class="site-foot">
-  <div class="wrap foot-in">
-    <div class="foot-brand">
-      <span class="brand"><svg class="logo logo-sm" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="9" fill="#0B6E4F"/><path d="M8 20.5h16" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M10 16.5h12" stroke="#6ee7b7" stroke-width="2.6" stroke-linecap="round" opacity=".9"/><path d="M12 12.5h8" stroke="#ffd36e" stroke-width="2.6" stroke-linecap="round"/></svg><span>세금적립</span></span>
-      <p>프리랜서의 수입과 경비를 기록하고 세금 적립 목표를 미리 확인하는 도구입니다.</p>
-    </div>
-    <div class="foot-meta">
-      <p class="privacy">데이터는 이 브라우저(localStorage)에만 저장되며 서버로 전송되지 않습니다.</p>
-      <p class="notice">계산 결과는 추정치입니다. 실제 세율과 신고 내용은 세무 전문가와 확인하세요.</p>
-      <p class="copy">&copy; 2026 세금적립. All rights reserved.</p>
-    </div>
-  </div>
-</footer>
+<footer class="wrap foot">데이터는 이 브라우저(localStorage)에만 저장돼요. 정기적으로 JSON으로 내보내 백업하세요.</footer>
 
-<div id="toast" role="status" aria-live="polite" hidden></div>
+<dialog id="modal" class="modal" aria-labelledby="modalTitle">
+  <form id="editForm" novalidate>
+    <h2 id="modalTitle">새 프롬프트</h2>
+    <label class="field"><span>제목</span>
+      <input id="fTitle" name="title" type="text" maxlength="80" required aria-describedby="eTitle">
+      <small id="eTitle" class="err" role="alert"></small></label>
+    <label class="field"><span>태그 <em>(쉼표로 구분)</em></span>
+      <input id="fTags" name="tags" type="text" placeholder="글쓰기, 블로그" aria-describedby="eTags">
+      <small id="eTags" class="err" role="alert"></small></label>
+    <label class="field"><span>본문 <em>({{변수}} 형태로 빈칸 만들기)</em></span>
+      <textarea id="fBody" name="body" rows="9" required aria-describedby="eBody"></textarea>
+      <small id="eBody" class="err" role="alert"></small></label>
+    <p class="muted" id="varHint"></p>
+    <p class="muted" id="fCount"></p>
+    <label class="field"><span>변수 기본값 <em>(이름=값, 한 줄에 하나)</em></span>
+      <textarea id="fDefaults" name="defaults" rows="3" placeholder="예: 톤=친근하게"></textarea></label>
+    <div class="modal-actions">
+      <button type="button" id="cancelBtn" class="btn ghost">취소</button>
+      <button type="submit" class="btn primary">저장</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="helpDialog" class="modal" aria-labelledby="helpTitle">
+  <form method="dialog">
+    <h2 id="helpTitle">키보드 단축키</h2>
+    <dl class="keys">
+      <dt><kbd>/</kbd></dt><dd>검색창으로 이동</dd>
+      <dt><kbd>n</kbd></dt><dd>새 프롬프트 만들기</dd>
+      <dt><kbd>c</kbd></dt><dd>선택한 프롬프트를 클립보드에 복사</dd>
+      <dt><kbd>?</kbd></dt><dd>이 단축키 도움말 열기</dd>
+      <dt><kbd>Esc</kbd></dt><dd>검색창에서 검색어 지우기, 대화상자 닫기</dd>
+    </dl>
+    <div class="modal-actions">
+      <button value="close" class="btn primary">닫기</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="confirm" class="modal small" aria-labelledby="confirmTitle">
+  <form method="dialog">
+    <h2 id="confirmTitle">확인</h2>
+    <p id="confirmMsg"></p>
+    <div class="modal-actions">
+      <button value="cancel" class="btn ghost">취소</button>
+      <button value="ok" class="btn danger" id="confirmOk">확인</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
 <script type="module" src="app.js"></script>
 </body>
 </html>
