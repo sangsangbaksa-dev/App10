@@ -5,9 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>프롬프트 보관함</title>
 <meta name="description" content="자주 쓰는 AI 프롬프트를 변수와 함께 보관하고, 값을 채워 바로 복사하는 개인 프롬프트 라이브러리.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<meta name="color-scheme" content="light dark">
 <link rel="stylesheet" href="styles.css">
 <script>try{var t=localStorage.getItem('pv-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
 </head>
@@ -16,12 +14,14 @@
 <header class="hero">
   <div class="orb orb-1" aria-hidden="true"></div>
   <div class="orb orb-2" aria-hidden="true"></div>
-  <div class="orb orb-3" aria-hidden="true"></div>
   <div class="grid-bg" aria-hidden="true"></div>
   <div class="wrap hero-inner">
     <div class="topbar">
       <span class="brand"><span class="logo" aria-hidden="true">{{ }}</span>프롬프트 보관함</span>
-      <button id="themeBtn" class="btn ghost sm" type="button" aria-label="테마 전환">테마 전환</button>
+      <div class="topbar-actions">
+        <button id="helpBtn" class="btn ghost sm" type="button" aria-haspopup="dialog">단축키 ?</button>
+        <button id="themeBtn" class="btn ghost sm" type="button">다크 모드</button>
+      </div>
     </div>
     <h1>자주 쓰는 프롬프트,<br><span class="grad">빈칸만 채워 바로 복사</span></h1>
     <p class="lead">{{변수}}로 비워 둔 자리에 값을 넣으면 완성된 프롬프트가 실시간으로 만들어져요.</p>
@@ -35,25 +35,48 @@
 
 <main id="main" class="wrap layout">
   <section class="pane list-pane" aria-labelledby="listTitle">
-    <h2 id="listTitle" class="sr">프롬프트 목록</h2>
+    <h2 id="listTitle" class="sr" tabindex="-1">프롬프트 목록</h2>
     <div class="controls">
       <label class="field grow"><span class="sr">검색</span>
-        <input id="search" type="search" placeholder="제목, 태그, 본문 검색" autocomplete="off">
+        <input id="search" type="search" placeholder="제목, 태그, 본문 검색 (/ 키로 바로 이동)" autocomplete="off">
       </label>
       <label class="field"><span class="sr">정렬</span>
         <select id="sort">
-          <option value="recent">최근 사용</option>
+          <option value="recent">최근 복사순</option>
           <option value="count">많이 쓴 순</option>
-          <option value="newest">최신 등록</option>
+          <option value="newest">최신 등록순</option>
+          <option value="title">제목순 (가나다)</option>
         </select>
       </label>
     </div>
-    <div id="tagBar" class="chips" role="group" aria-label="태그 필터"></div>
+    <div class="filter-row">
+      <button id="favFilter" class="chip filter" type="button" aria-pressed="false">★ 즐겨찾기만</button>
+      <div id="tagBar" class="chips" role="group" aria-label="태그 필터"></div>
+    </div>
+    <div id="bulkBar" class="bulk-bar" hidden>
+      <span id="bulkCount" class="bulk-count" aria-live="polite">0개 선택됨</span>
+      <div class="bulk-actions">
+        <button id="bulkAllBtn" class="btn ghost sm" type="button">보이는 항목 모두 선택</button>
+        <button id="bulkClearBtn" class="btn ghost sm" type="button">선택 해제</button>
+        <button id="bulkExportBtn" class="btn ghost sm" type="button">선택 내보내기</button>
+        <button id="bulkDelBtn" class="btn danger sm" type="button" disabled>선택 삭제</button>
+      </div>
+    </div>
     <ul id="list" class="cards"></ul>
     <div id="empty" class="empty" hidden>
+      <svg class="art" viewBox="0 0 160 120" aria-hidden="true" focusable="false">
+        <rect class="a1" x="30" y="22" width="100" height="72" rx="14"/>
+        <rect class="a2" x="46" y="40" width="68" height="6" rx="3"/>
+        <rect class="a2" x="46" y="54" width="52" height="6" rx="3"/>
+        <rect class="a2" x="46" y="68" width="60" height="6" rx="3"/>
+        <circle class="a4" cx="120" cy="30" r="14"/>
+        <path class="a5" d="M120 22 l2 6 6 2 -6 2 -2 6 -2 -6 -6 -2 6 -2z"/>
+      </svg>
       <p id="emptyMsg"></p>
+      <button id="emptyDemo" class="btn ghost sm" type="button">예시 데이터 불러오기</button>
     </div>
     <div class="tools">
+      <button id="bulkToggle" class="btn ghost sm" type="button" aria-pressed="false">여러 개 선택</button>
       <button id="exportBtn" class="btn ghost sm" type="button">JSON 내보내기</button>
       <button id="importBtn" class="btn ghost sm" type="button">JSON 가져오기</button>
       <button id="clearBtn" class="btn danger sm" type="button">전체 삭제</button>
@@ -63,7 +86,14 @@
 
   <section class="pane detail-pane" id="detail" aria-labelledby="detailTitle" tabindex="-1">
     <div id="detailEmpty" class="detail-empty">
-      <div class="big" aria-hidden="true">✦</div>
+      <svg class="art" viewBox="0 0 160 120" aria-hidden="true" focusable="false">
+        <rect class="a1" x="30" y="22" width="100" height="72" rx="14"/>
+        <rect class="a2" x="46" y="40" width="68" height="6" rx="3"/>
+        <rect class="a2" x="46" y="54" width="52" height="6" rx="3"/>
+        <rect class="a2" x="46" y="68" width="60" height="6" rx="3"/>
+        <circle class="a4" cx="120" cy="30" r="14"/>
+        <path class="a5" d="M120 22 l2 6 6 2 -6 2 -2 6 -2 -6 -6 -2 6 -2z"/>
+      </svg>
       <h2>프롬프트를 선택해 보세요</h2>
       <p>왼쪽 목록에서 프롬프트를 고르면 변수 입력 폼과 미리보기가 여기에 나타나요.</p>
     </div>
@@ -71,7 +101,10 @@
       <div class="detail-head">
         <button id="backBtn" class="btn ghost sm back" type="button">목록으로</button>
         <div class="detail-actions">
+          <button id="favBtn" class="btn ghost sm" type="button" aria-pressed="false">☆ 즐겨찾기</button>
           <button id="editBtn" class="btn ghost sm" type="button">수정</button>
+          <button id="dupBtn" class="btn ghost sm" type="button">복제</button>
+          <button id="mdBtn" class="btn ghost sm" type="button">Markdown</button>
           <button id="delBtn" class="btn danger sm" type="button">삭제</button>
         </div>
       </div>
@@ -83,12 +116,45 @@
       <h3>채우기</h3>
       <form id="fillForm" class="fill" autocomplete="off"></form>
       <p id="noVars" class="muted" hidden>이 프롬프트에는 변수가 없어요. 그대로 복사하면 돼요.</p>
-      <h3>미리보기</h3>
+      <div class="preview-head">
+        <h3>미리보기</h3>
+        <span id="countInfo" class="muted" aria-live="off"></span>
+      </div>
       <pre id="preview" class="code preview" aria-live="polite"></pre>
       <div class="copy-row">
         <button id="copyBtn" class="btn primary" type="button">클립보드에 복사</button>
         <button id="resetBtn" class="btn ghost" type="button">입력 초기화</button>
       </div>
+
+      <h3>테스트 기록</h3>
+      <form id="runForm" class="runform" autocomplete="off">
+        <label class="field"><span>모델 이름 <em>(직접 입력)</em></span>
+          <input id="runModel" type="text" maxlength="40" placeholder="예: my-model-name">
+        </label>
+        <label class="field"><span>결과 메모</span>
+          <textarea id="runResult" rows="3" maxlength="2000" placeholder="이 프롬프트로 받은 결과나 느낀 점"></textarea>
+        </label>
+        <p id="runErr" class="err" role="alert"></p>
+        <div class="copy-row">
+          <button id="runAddBtn" class="btn ghost sm" type="submit">기록 추가</button>
+        </div>
+      </form>
+      <p id="runEmpty" class="muted">아직 테스트 기록이 없어요.</p>
+      <ul id="runList" class="runs"></ul>
+
+      <h3>버전 기록</h3>
+      <div id="verBox" hidden>
+        <div class="diff-controls">
+          <label class="field"><span>A 버전 <em>(복원할 기준)</em></span><select id="diffA"></select></label>
+          <label class="field"><span>B 버전</span><select id="diffB"></select></label>
+        </div>
+        <p id="diffSum" class="muted" aria-live="polite"></p>
+        <pre id="diffOut" class="code diff" aria-label="버전 비교 결과"></pre>
+        <div class="copy-row">
+          <button id="restoreBtn" class="btn ghost sm" type="button">A 버전으로 복원</button>
+        </div>
+      </div>
+      <p id="verEmpty" class="muted" hidden>아직 저장된 이전 버전이 없어요. 수정하면 바뀌기 전 내용이 여기에 남아요 (최근 5개).</p>
     </article>
   </section>
 </main>
@@ -108,9 +174,28 @@
       <textarea id="fBody" name="body" rows="9" required aria-describedby="eBody"></textarea>
       <small id="eBody" class="err" role="alert"></small></label>
     <p class="muted" id="varHint"></p>
+    <p class="muted" id="fCount"></p>
+    <label class="field"><span>변수 기본값 <em>(이름=값, 한 줄에 하나)</em></span>
+      <textarea id="fDefaults" name="defaults" rows="3" placeholder="예: 톤=친근하게"></textarea></label>
     <div class="modal-actions">
       <button type="button" id="cancelBtn" class="btn ghost">취소</button>
       <button type="submit" class="btn primary">저장</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="helpDialog" class="modal" aria-labelledby="helpTitle">
+  <form method="dialog">
+    <h2 id="helpTitle">키보드 단축키</h2>
+    <dl class="keys">
+      <dt><kbd>/</kbd></dt><dd>검색창으로 이동</dd>
+      <dt><kbd>n</kbd></dt><dd>새 프롬프트 만들기</dd>
+      <dt><kbd>c</kbd></dt><dd>선택한 프롬프트를 클립보드에 복사</dd>
+      <dt><kbd>?</kbd></dt><dd>이 단축키 도움말 열기</dd>
+      <dt><kbd>Esc</kbd></dt><dd>검색창에서 검색어 지우기, 대화상자 닫기</dd>
+    </dl>
+    <div class="modal-actions">
+      <button value="close" class="btn primary">닫기</button>
     </div>
   </form>
 </dialog>
