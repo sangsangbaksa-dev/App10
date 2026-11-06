@@ -216,3 +216,9 @@ kbd{font-family:var(--mono);font-size:.85rem;padding:2px 8px;border-radius:6px;b
 .recovery-actions{display:flex;gap:8px;flex-wrap:wrap}
 .recovery:not([hidden])+.layout{margin-top:16px}
 @media(max-width:480px){.hero-actions .btn,.recovery-actions .btn{flex:1 1 auto}.recovery{padding:16px}}
+
+/* Separate variable entry from the finished prompt without adding visual noise. */
+.fill .fgroup{padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--code-bg)}
+.fill .fgroup legend{padding:0 6px}
+.copy-row{padding-top:14px;border-top:1px solid var(--border)}
+@media(max-width:480px){.fill{gap:14px}.fill .fgroup{padding:12px}.copy-row .btn{flex:1 1 auto}}
