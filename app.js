@@ -88,7 +88,7 @@ function highlight(container, text, values) {
     const name = m[1].trim().normalize('NFC');
     const val = values && values[name];
     const filled = typeof val === 'string' && val !== '';
-    container.append(el('span', { class: 'v' + (filled ? ' filled' : ''), text: filled ? val : '{{' + name + '}}' }));
+    container.append(el('span', { class: 'v' + (filled ? ' filled' : ''), text: filled ? val : (name ? '{{' + name + '}}' : m[0]) }));
     last = m.index + m[0].length;
   }
   if (last < text.length) container.append(text.slice(last));

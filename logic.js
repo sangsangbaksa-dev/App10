@@ -26,6 +26,7 @@ export function renderTemplate(text, values = {}) {
   const normalized = new Map(Object.entries(values || {}).map(([k, v]) => [variableName(k), v]));
   return text.replace(VAR_RE, (full, raw) => {
     const name = variableName(raw);
+    if (!name) return full;
     const v = normalized.get(name);
     return typeof v === 'string' && v !== '' ? v : '{{' + name + '}}';
   });
@@ -254,7 +255,7 @@ function sanitizePrompt(p) {
 
 export function parseExport(text) {
   let data;
-  try { data = JSON.parse(text); } catch { return { ok: false, error: 'JSON 형식이 올바르지 않아요.', prompts: [] }; }
+  try { data = JSON.parse(String(text ?? '').replace(/^\uFEFF/, '')); } catch { return { ok: false, error: 'JSON 형식이 올바르지 않아요.', prompts: [] }; }
   const list = Array.isArray(data) ? data : data && Array.isArray(data.prompts) ? data.prompts : null;
   if (!list) return { ok: false, error: '프롬프트 목록을 찾을 수 없어요.', prompts: [] };
   const prompts = [];

@@ -245,3 +245,13 @@ test('defaults support CR and CRLF lines and literal special property names', ()
   assert.equal(formatDefaults(defaults), '__proto__=literal\n주제=우주\nconstructor=작성자');
   assert.equal(renderTemplate('{{title}}', Object.create({ title: 'inherited' })), '{{title}}');
 });
+
+
+test('blank template markers retain their literal spelling', () => {
+  assert.equal(renderTemplate('before {{   }} and {{\t}} after'), 'before {{   }} and {{\t}} after');
+  assert.deepEqual(extractVariables('{{   }} {{\t}}'), []);
+});
+test('JSON prompt backups with a UTF-8 BOM import like ordinary backups', () => {
+  const text = JSON.stringify([{ id: 'bom', title: '한글', body: '{{주제}}' }]);
+  assert.deepEqual(parseExport('\uFEFF' + text), parseExport(text));
+});
