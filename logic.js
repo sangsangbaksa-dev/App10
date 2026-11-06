@@ -2,6 +2,9 @@
 export const LIMITS = { title: 80, body: 8000, tag: 24, tags: 12, defaultValue: 500, versions: 5, runs: 20, model: 40, result: 2000 };
 
 const VAR_RE = /\{\{([^{}]+?)\}\}/g;
+const variableName = (value) => String(value).trim().normalize('NFC');
+// Preserve literal variable names such as __proto__ as data, never object setters.
+const setValue = (obj, name, value) => Object.defineProperty(obj, name, { value, enumerable: true, configurable: true, writable: true });
 // Hangul, kana, CJK ideographs: roughly one token per character in most tokenizers.
 const CJK_RE = /[ᄀ-ᇿ぀-ヿ㄰-㆏㐀-䶿一-鿿가-힯豈-﫿]/g;
 
@@ -10,7 +13,7 @@ export function extractVariables(text) {
   const seen = new Set();
   const out = [];
   for (const m of text.matchAll(VAR_RE)) {
-    const name = m[1].trim();
+    const name = variableName(m[1]);
     if (!name || seen.has(name)) continue;
     seen.add(name);
     out.push(name);
@@ -20,9 +23,10 @@ export function extractVariables(text) {
 
 export function renderTemplate(text, values = {}) {
   if (typeof text !== 'string') return '';
+  const normalized = new Map(Object.entries(values || {}).map(([k, v]) => [variableName(k), v]));
   return text.replace(VAR_RE, (full, raw) => {
-    const name = raw.trim();
-    const v = values[name];
+    const name = variableName(raw);
+    const v = normalized.get(name);
     return typeof v === 'string' && v !== '' ? v : '{{' + name + '}}';
   });
 }
@@ -88,25 +92,25 @@ function cleanDefaults(obj) {
   const out = {};
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return out;
   for (const [k, v] of Object.entries(obj)) {
-    const name = String(k).trim();
+    const name = variableName(k);
     if (!name || typeof v !== 'string' || v === '') continue;
-    out[name] = v.slice(0, LIMITS.defaultValue);
+    setValue(out, name, v.slice(0, LIMITS.defaultValue));
   }
   return out;
 }
 
 /** Parses "name=value" lines. If `names` is given, unknown variable names are dropped. */
 export function parseDefaults(text, names) {
-  const allowed = names ? new Set(names) : null;
+  const allowed = names ? new Set(names.map(variableName)) : null;
   const obj = {};
-  for (const line of String(text ?? '').split(/\r?\n/)) {
+  for (const line of String(text ?? '').split(/\r\n|[\r\n]/)) {
     const i = line.indexOf('=');
     if (i < 0) continue;
-    const name = line.slice(0, i).trim();
+    const name = variableName(line.slice(0, i));
     const value = line.slice(i + 1).trim();
     if (!name || !value) continue;
     if (allowed && !allowed.has(name)) continue;
-    obj[name] = value;
+    setValue(obj, name, value);
   }
   return cleanDefaults(obj);
 }

@@ -77,15 +77,15 @@ function tagFilterBtn(t) {
 function current() { return state.prompts.find((p) => p.id === state.selected) || null; }
 /* keep keyboard focus on a sensible control after a re-render */
 function focusEl(sel) { const n = document.querySelector(sel); if (n) n.focus(); }
-function defaultsOf(p) { return { ...(p && p.defaults ? p.defaults : {}) }; }
-function hasDefault(p, name) { return typeof (p.defaults || {})[name] === 'string'; }
+function defaultsOf(p) { return Object.fromEntries(Object.entries(p?.defaults || {}).map(([name, value]) => [name.trim().normalize('NFC'), value])); }
+function hasDefault(p, name) { return typeof defaultsOf(p)[name] === 'string'; }
 
 function highlight(container, text, values) {
   container.textContent = '';
   let last = 0;
   for (const m of text.matchAll(/\{\{([^{}]+?)\}\}/g)) {
     if (m.index > last) container.append(text.slice(last, m.index));
-    const name = m[1].trim();
+    const name = m[1].trim().normalize('NFC');
     const val = values && values[name];
     const filled = typeof val === 'string' && val !== '';
     container.append(el('span', { class: 'v' + (filled ? ' filled' : ''), text: filled ? val : '{{' + name + '}}' }));
@@ -181,7 +181,7 @@ function fieldFor(name, i, p) {
   const id = 'var-' + i;
   const input = long ? el('textarea', { id, rows: '3' }) : el('input', { id, type: 'text' });
   input.value = typeof state.values[name] === 'string' ? state.values[name] : '';
-  input.addEventListener('input', () => { state.values[name] = input.value; renderPreview(); });
+  input.addEventListener('input', () => { Object.defineProperty(state.values, name, { value: input.value, enumerable: true, configurable: true, writable: true }); renderPreview(); });
   return el('label', { class: 'field' + (long ? ' wide' : ''), for: id },
     el('span', { class: 'flabel' }, name, hasDefault(p, name) ? el('span', { class: 'badge', text: '기본값' }) : null),
     input);
