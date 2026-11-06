@@ -1,3 +1,4 @@
+import { backupIndicator } from './backup-status.js';
 import {
   extractVariables, renderTemplate, normalizeTags, searchPrompts, sortPrompts, validatePrompt,
   mergeImport, parseExport, demoPrompts, textStats, duplicatePrompt, toMarkdown,
@@ -5,6 +6,7 @@ import {
   addTestRun, removeTestRun,
 } from './logic.js';
 
+const backupState = backupIndicator(document.getElementById('backupStatus'), 'prompt-vault:backup-requested');
 const KEY = 'pv-prompts-v1';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...kids) => {
@@ -27,20 +29,22 @@ const state = {
 
 /* storage */
 const BACKUP_KEY = KEY + '-backup';
+let recoveryRaw = null;
 function load() {
   let raw;
   try { raw = localStorage.getItem(KEY); } catch { state.storageOk = false; return []; }
   if (!raw) return [];
   const r = parseExport(raw);
   if (!r.ok || r.invalid > 0) {
-    // Keep the original text so unreadable entries are not lost on the next save.
-    try { localStorage.setItem(BACKUP_KEY, raw); } catch {}
-    toast(r.ok ? `읽을 수 없는 항목 ${r.invalid}개를 백업해 두었어요 (${BACKUP_KEY}).` : `저장된 데이터를 읽지 못해 백업해 두었어요 (${BACKUP_KEY}).`, 'bad');
+    // Refuse to overwrite the original until the user explicitly chooses recovery.
+    recoveryRaw = raw;
+    try { if (!localStorage.getItem(BACKUP_KEY)) localStorage.setItem(BACKUP_KEY, raw); } catch {}
   }
   return r.ok ? r.prompts : [];
 }
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(state.prompts)); state.storageOk = true; }
+  if (recoveryRaw !== null) return false;
+  try { localStorage.setItem(KEY, JSON.stringify(state.prompts)); state.storageOk = true; return true; }
   catch { if (state.storageOk) toast('저장소를 쓸 수 없어 이번 세션에만 유지돼요.', 'bad'); state.storageOk = false; }
 }
 
@@ -396,6 +400,7 @@ function download(name, type, text) {
 function exportJson() {
   download('prompt-vault-' + new Date().toISOString().slice(0, 10) + '.json', 'application/json',
     JSON.stringify({ app: 'prompt-vault', version: 1, exportedAt: new Date().toISOString(), prompts: state.prompts }, null, 2));
+  if (recoveryRaw === null) backupState.mark();
   toast(`${state.prompts.length}개를 내보냈어요.`);
 }
 function exportMarkdown() {
@@ -493,6 +498,14 @@ function onGlobalKey(e) {
 
 /* wiring */
 state.prompts = load();
+$('recovery').hidden = recoveryRaw === null;
+$('recoveryDownload').addEventListener('click', () => { if (recoveryRaw !== null) download('prompt-vault-original.json', 'application/json', recoveryRaw); });
+$('recoveryReset').addEventListener('click', async () => {
+  if (!(await ask('현재 기록으로 시작', '읽지 못한 원본을 현재 화면의 기록으로 덮어씁니다. 원본을 먼저 내려받았는지 확인하세요.', '시작'))) return;
+  const old = recoveryRaw; recoveryRaw = null;
+  if (!save()) { recoveryRaw = old; return; }
+  $('recovery').hidden = true; toast('현재 기록을 저장했어요.');
+});
 $('themeBtn').addEventListener('click', toggleTheme);
 $('helpBtn').addEventListener('click', () => $('helpDialog').showModal());
 if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncThemeBtn);
