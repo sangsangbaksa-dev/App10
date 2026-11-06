@@ -259,10 +259,11 @@ export function parseExport(text) {
   const list = Array.isArray(data) ? data : data && Array.isArray(data.prompts) ? data.prompts : null;
   if (!list) return { ok: false, error: '프롬프트 목록을 찾을 수 없어요.', prompts: [] };
   const prompts = [];
+  const ids = new Set();
   let invalid = 0;
   for (const item of list) {
     const s = sanitizePrompt(item);
-    if (s) prompts.push(s); else invalid++;
+    if (s && !ids.has(s.id)) { ids.add(s.id); prompts.push(s); } else invalid++;
   }
   return { ok: true, prompts, invalid };
 }
