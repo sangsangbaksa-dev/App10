@@ -22,4 +22,11 @@ module.exports=async function(page,base){
  await page.click('#recoveryReset');await page.click('#confirmOk');await page.waitForFunction(()=>document.querySelector('#recovery').hidden);
  assert.notEqual(await page.evaluate(()=>localStorage.getItem('pv-prompts-v1')),damaged);
 
+ const duplicates=JSON.stringify([{id:'duplicate',title:'First',body:'Keep first'},{id:'duplicate',title:'Second',body:'Keep second'}]);
+ await page.evaluate(raw=>localStorage.setItem('pv-prompts-v1',raw),duplicates);await page.reload();
+ assert.equal(await page.locator('#recovery').isVisible(),true,'Duplicate stored ids activate original-data recovery');
+ await page.click('#demoBtn');
+ assert.equal(await page.evaluate(()=>localStorage.getItem('pv-prompts-v1')),duplicates,'Ambiguous source records stay intact');
+ const [dupeOriginal]=await Promise.all([page.waitForEvent('download'),page.click('#recoveryDownload')]);
+ assert.equal(require('node:fs').readFileSync(await dupeOriginal.path(),'utf8'),duplicates);
 };

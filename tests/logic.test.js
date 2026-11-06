@@ -255,3 +255,14 @@ test('JSON prompt backups with a UTF-8 BOM import like ordinary backups', () => 
   const text = JSON.stringify([{ id: 'bom', title: '한글', body: '{{주제}}' }]);
   assert.deepEqual(parseExport('\uFEFF' + text), parseExport(text));
 });
+
+
+test('parseExport counts duplicate ids as invalid instead of returning ambiguous records', () => {
+  const a = { id: 'same', title: 'First', body: 'Keep original' };
+  const b = { id: 'same', title: 'Second', body: 'Different content' };
+  const r = parseExport(JSON.stringify([a, b]));
+  assert.equal(r.ok, true);
+  assert.equal(r.invalid, 1);
+  assert.equal(r.prompts.length, 1);
+  assert.equal(r.prompts[0].body, a.body);
+});
