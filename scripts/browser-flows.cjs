@@ -1,8 +1,11 @@
 const assert=require('node:assert/strict');
 module.exports=async function(page,base){
- await page.goto(base+'/');await page.click('#newBtn');await page.fill('#fTitle','검증 프롬프트');await page.fill('#fBody','Hello {{이름}} <script>alert(1)</script>');await page.fill('#fDefaults','이름=민수');await page.click('#editForm [type=submit]');
+ await page.goto(base+'/');await page.click('#newBtn');await page.fill('#fTitle','검증 프롬프트');await page.fill('#fBody','Hello {{이름}} {{주제}} {{__proto__}} <script>alert(1)</script>');await page.fill('#fDefaults','이름=민수\n주제=우주\n__proto__=기본값');await page.click('#editForm [type=submit]');
  await page.waitForFunction(()=>document.querySelector('#preview').textContent.includes('민수'));
  assert.equal(await page.locator('#preview script').count(),0);
+ assert.ok((await page.textContent('#preview')).includes('우주 기본값'));
+ await page.locator('label.field').filter({hasText:'__proto__'}).locator('input').fill('직접입력');
+ assert.ok((await page.textContent('#preview')).includes('우주 직접입력'));
  await page.click('#copyBtn');await page.waitForFunction(()=>JSON.parse(localStorage['pv-prompts-v1'])[0].useCount>0);
  await page.click('#editBtn');await page.fill('#fBody','Changed {{이름}}');await page.click('#editForm [type=submit]');
  assert.equal(await page.evaluate(()=>JSON.parse(localStorage['pv-prompts-v1'])[0].history.length),1);

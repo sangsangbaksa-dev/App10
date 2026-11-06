@@ -226,3 +226,22 @@ test('parseExport keeps history and testRuns, drops malformed entries', () => {
   assert.deepEqual(old.history, []);
   assert.deepEqual(old.testRuns, []);
 });
+
+
+test('canonically equivalent Korean variable names share input and defaults', () => {
+  const composed = '주제';
+  const decomposed = composed.normalize('NFD');
+  assert.deepEqual(extractVariables(`{{${composed}}} {{ ${decomposed} }}`), [composed]);
+  assert.equal(renderTemplate(`{{${decomposed}}}`, { [composed]: '우주' }), '우주');
+  assert.equal(renderTemplate(`{{${composed}}}`, { [decomposed]: '바다' }), '바다');
+  assert.deepEqual(parseDefaults(`${decomposed}=우주`, [composed]), { [composed]: '우주' });
+});
+
+test('defaults support CR and CRLF lines and literal special property names', () => {
+  const defaults = parseDefaults('__proto__=literal\r주제=우주\r\nconstructor=작성자');
+  assert.equal(Object.getPrototypeOf(defaults), Object.prototype);
+  assert.equal(Object.hasOwn(defaults, '__proto__'), true);
+  assert.equal(renderTemplate('{{__proto__}} / {{주제}} / {{constructor}}', defaults), 'literal / 우주 / 작성자');
+  assert.equal(formatDefaults(defaults), '__proto__=literal\n주제=우주\nconstructor=작성자');
+  assert.equal(renderTemplate('{{title}}', Object.create({ title: 'inherited' })), '{{title}}');
+});
