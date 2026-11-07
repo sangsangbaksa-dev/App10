@@ -4,6 +4,9 @@ import {
   parseDefaults, formatDefaults, removeByIds, recordVersion, restoreVersion, diffLines,
   addTestRun, removeTestRun, rememberValues, parseRecent, suggestionsFor, RECENT,
 } from './logic.js';
+import {
+  t, setLang, getLang, detectLang, readSavedLang, saveLang, applyI18n, LANGS, fmtNumber, fmtDateTime,
+} from './i18n.js';
 
 const KEY = 'pv-prompts-v1';
 const $ = (id) => document.getElementById(id);
@@ -17,7 +20,7 @@ const el = (tag, props = {}, ...kids) => {
   return n;
 };
 const layout = () => document.querySelector('.layout');
-const fmtNum = (n) => n.toLocaleString('ko-KR');
+const fmtNum = (n) => fmtNumber(n);
 
 const state = {
   prompts: [], q: '', tag: '', fav: false, sort: 'recent', selected: null, values: {},
@@ -36,20 +39,20 @@ function load() {
   if (!r.ok || r.invalid > 0) {
     // Keep the original text so unreadable entries are not lost on the next save.
     try { localStorage.setItem(BACKUP_KEY, raw); } catch {}
-    toast(r.ok ? `읽을 수 없는 항목 ${r.invalid}개를 백업해 두었어요 (${BACKUP_KEY}).` : `저장된 데이터를 읽지 못해 백업해 두었어요 (${BACKUP_KEY}).`, 'bad');
+    toast(r.ok ? t('errUnreadable', { n: r.invalid, key: BACKUP_KEY }) : t('errReadSaved', { key: BACKUP_KEY }), 'bad');
   }
   return r.ok ? r.prompts : [];
 }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state.prompts)); state.storageOk = true; }
-  catch { if (state.storageOk) toast('저장소를 쓸 수 없어 이번 세션에만 유지돼요.', 'bad'); state.storageOk = false; }
+  catch { if (state.storageOk) toast(t('toastStorage'), 'bad'); state.storageOk = false; }
 }
 
 /* helpers */
 function toast(msg, kind = 'ok') {
-  const t = el('div', { class: 'toast ' + kind, text: msg });
-  $('toasts').append(t);
-  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 350); }, 2600);
+  const tn = el('div', { class: 'toast ' + kind, text: msg });
+  $('toasts').append(tn);
+  setTimeout(() => { tn.classList.add('out'); setTimeout(() => tn.remove(), 350); }, 2600);
 }
 function uid() {
   try { if (crypto.randomUUID) return crypto.randomUUID(); } catch {}
@@ -57,18 +60,18 @@ function uid() {
 }
 function hueOf(s) { let h = 0; for (const c of s) h = (h * 31 + c.codePointAt(0)) % 360; return h; }
 function fmtTime(ts) {
-  if (!ts) return '없음';
-  const d = new Date(ts), diff = Date.now() - ts, m = 60000;
-  if (diff < m) return '방금 전';
-  if (diff < 60 * m) return Math.floor(diff / m) + '분 전';
-  if (diff < 24 * 60 * m) return Math.floor(diff / 60 / m) + '시간 전';
-  return d.toLocaleString('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  if (!ts) return t('timeNone');
+  const diff = Date.now() - ts, m = 60000;
+  if (diff < m) return t('timeJust');
+  if (diff < 60 * m) return t('timeMin', { n: Math.floor(diff / m) });
+  if (diff < 24 * 60 * m) return t('timeHour', { n: Math.floor(diff / 60 / m) });
+  return fmtDateTime(ts);
 }
-function tagChip(t) { const c = el('span', { class: 'chip', text: '#' + t }); c.style.setProperty('--h', hueOf(t)); return c; }
-function tagFilterBtn(t) {
-  const c = el('button', { class: 'chip', type: 'button', 'aria-pressed': String(state.tag === t), title: '이 태그로 필터', text: '#' + t,
-    onclick: () => { state.tag = state.tag === t ? '' : t; layout().classList.remove('show-detail'); render(); focusEl(`#tagBar [data-tag="${CSS.escape(t)}"]`); } });
-  c.style.setProperty('--h', hueOf(t));
+function tagChip(tg) { const c = el('span', { class: 'chip', text: t('tagChipLabel', { t: tg }) }); c.style.setProperty('--h', hueOf(tg)); return c; }
+function tagFilterBtn(tg) {
+  const c = el('button', { class: 'chip', type: 'button', 'aria-pressed': String(state.tag === tg), title: t('tagFilterTitle'), text: t('tagChipLabel', { t: tg }),
+    onclick: () => { state.tag = state.tag === tg ? '' : tg; layout().classList.remove('show-detail'); render(); focusEl(`#tagBar [data-tag="${CSS.escape(tg)}"]`); } });
+  c.style.setProperty('--h', hueOf(tg));
   return c;
 }
 function current() { return state.prompts.find((p) => p.id === state.selected) || null; }
@@ -95,24 +98,24 @@ function highlight(container, text, values) {
 function renderTags() {
   const bar = $('tagBar'); bar.textContent = '';
   const counts = new Map();
-  for (const p of state.prompts) for (const t of p.tags) counts.set(t, (counts.get(t) || 0) + 1);
-  for (const [t, n] of [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'))) {
-    const b = el('button', { class: 'chip', type: 'button', 'aria-pressed': String(state.tag === t), text: `#${t} ${n}`, 'data-tag': t,
-      onclick: () => { state.tag = state.tag === t ? '' : t; render(); focusEl(`#tagBar [data-tag="${CSS.escape(t)}"]`); } });
-    b.style.setProperty('--h', hueOf(t));
+  for (const p of state.prompts) for (const tg of p.tags) counts.set(tg, (counts.get(tg) || 0) + 1);
+  for (const [tg, n] of [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], getLang()))) {
+    const b = el('button', { class: 'chip', type: 'button', 'aria-pressed': String(state.tag === tg), text: t('countTag', { t: tg, n }), 'data-tag': tg,
+      onclick: () => { state.tag = state.tag === tg ? '' : tg; render(); focusEl(`#tagBar [data-tag="${CSS.escape(tg)}"]`); } });
+    b.style.setProperty('--h', hueOf(tg));
     bar.append(b);
   }
   const fav = $('favFilter');
   fav.setAttribute('aria-pressed', String(state.fav));
-  fav.textContent = `★ 즐겨찾기만 (${state.prompts.filter((p) => p.favorite).length})`;
+  fav.textContent = t('favFilterOnly', { n: state.prompts.filter((p) => p.favorite).length });
 }
 function renderBulk() {
   const n = state.checked.size;
   $('bulkBar').hidden = !state.bulk;
-  $('bulkCount').textContent = `${n}개 선택됨`;
+  $('bulkCount').textContent = t('bulkCount', { n });
   $('bulkDelBtn').disabled = n === 0;
   const tg = $('bulkToggle');
-  tg.textContent = state.bulk ? '선택 종료' : '여러 개 선택';
+  tg.textContent = state.bulk ? t('bulkToggleOff') : t('bulkToggleOn');
   tg.setAttribute('aria-pressed', String(state.bulk));
 }
 function renderList() {
@@ -126,33 +129,31 @@ function renderList() {
       class: 'card-btn', type: 'button', 'aria-current': String(isSel),
       onclick: () => (state.bulk ? toggleChecked(p.id) : select(p.id, true)),
     },
-      el('span', { class: 'card-title' }, p.favorite ? el('span', { class: 'star', 'aria-hidden': 'true', text: '★ ' }) : null, p.title),
+      el('span', { class: 'card-title' }, p.title),
       el('span', { class: 'card-body', text: p.body }),
       el('span', { class: 'card-foot' },
-        el('span', { text: `사용 ${p.useCount}회` }),
-        el('span', { text: '최근 복사 ' + fmtTime(p.lastUsedAt) })));
-    const li = el('li', { class: 'card' + (isSel ? ' active' : '') + (state.bulk ? ' bulk' : '') + (isChecked ? ' checked' : '') }, btn);
+        el('span', { text: t('cardUse', { n: p.useCount }) }),
+        el('span', { text: t('cardLast', { t: fmtTime(p.lastUsedAt) }) })));
+    const li = el('li', { class: 'card' + (isSel ? ' active' : '') + (state.bulk ? ' bulk' : '') + (isChecked ? ' checked' : '') + (p.favorite ? ' fav' : '') }, btn);
     if (state.bulk) {
-      const cb = el('input', { type: 'checkbox', class: 'pick', 'aria-label': `${p.title} 선택`, 'data-id': p.id });
+      const cb = el('input', { type: 'checkbox', class: 'pick', 'aria-label': t('pickLabel', { title: p.title }), 'data-id': p.id });
       cb.checked = isChecked;
       cb.addEventListener('change', () => toggleChecked(p.id));
       li.append(cb);
     }
     const chips = el('span', { class: 'chips' });
-    if (p.demo) chips.append(el('span', { class: 'chip demo', text: '예시 데이터' }));
-    (p.tags || []).forEach((t) => chips.append(tagChip(t)));
+    if (p.demo) chips.append(el('span', { class: 'chip demo', text: t('demoTag') }));
+    (p.tags || []).forEach((tg) => chips.append(tagChip(tg)));
     if (chips.childNodes.length) btn.append(chips);
     list.append(li);
   }
   const none = state.prompts.length === 0;
   $('empty').hidden = items.length > 0;
-  $('emptyMsg').textContent = none
-    ? '아직 프롬프트가 없어요. 새로 만들거나 예시 데이터를 불러와 보세요.'
-    : '조건에 맞는 프롬프트가 없어요. 검색어나 필터를 바꿔 보세요.';
+  $('emptyMsg').textContent = none ? t('emptyNone') : t('emptyNoMatch');
   $('emptyDemo').hidden = !none;
   const favCount = state.prompts.filter((p) => p.favorite).length;
   const total = state.prompts.reduce((s, p) => s + (p.useCount || 0), 0);
-  $('stats').textContent = `프롬프트 ${state.prompts.length}개 · 즐겨찾기 ${favCount}개 · 총 ${total}회 사용` + (state.storageOk ? '' : ' · 저장소 사용 불가(임시 모드)');
+  $('stats').textContent = t('statsLine', { n: state.prompts.length, fav: favCount, total }) + (state.storageOk ? '' : t('statsTemp'));
 }
 function toggleChecked(id) {
   if (state.checked.has(id)) state.checked.delete(id); else state.checked.add(id);
@@ -180,22 +181,22 @@ function saveRecent() {
   try { localStorage.setItem(RECENT_KEY, JSON.stringify(state.recent)); } catch {}
 }
 function fieldFor(name, i, p) {
-  const long = name.length > 12 || /내용|코드|본문|설명/.test(name);
+  const long = name.length > 12 || /내용|코드|본문|설명|内容|コード|本文|代码|código|contenido|content|code|body|description|text/i.test(name);
   const id = 'var-' + i;
   const input = long ? el('textarea', { id, rows: '3' }) : el('input', { id, type: 'text' });
   input.value = typeof state.values[name] === 'string' ? state.values[name] : '';
   input.addEventListener('input', () => { state.values[name] = input.value; renderPreview(); });
   const label = el('label', { class: 'field', for: id },
-    el('span', { class: 'flabel' }, name, hasDefault(p, name) ? el('span', { class: 'badge', text: '기본값' }) : null),
+    el('span', { class: 'flabel' }, name, hasDefault(p, name) ? el('span', { class: 'badge', text: t('flagDefault') }) : null),
     input);
   const wrap = el('div', { class: 'fwrap' + (long ? ' wide' : '') }, label);
   const picks = suggestionsFor(state.recent, name, RECENT.shown);
   if (picks.length) {
-    const row = el('div', { class: 'qpicks', role: 'group', 'aria-label': `${name} 최근 입력값` });
-    row.append(el('span', { class: 'qpicks-label', text: '최근' }));
+    const row = el('div', { class: 'qpicks', role: 'group', 'aria-label': t('recentGroup', { name }) });
+    row.append(el('span', { class: 'qpicks-label', text: t('recentLabel') }));
     for (const v of picks) {
-      row.append(el('button', { class: 'qpick', type: 'button', title: `"${v}" 넣기`,
-        'aria-label': `최근 입력값 ${v} 넣기`, text: v.length > 24 ? v.slice(0, 24) + '…' : v,
+      row.append(el('button', { class: 'qpick', type: 'button', title: t('recentTitle', { v }),
+        'aria-label': t('recentPick', { v }), text: v.length > 24 ? v.slice(0, 24) + '…' : v,
         onclick: () => { input.value = v; state.values[name] = v; renderPreview(); input.focus(); } }));
     }
     wrap.append(row);
@@ -207,13 +208,13 @@ function renderDetail() {
   $('detailEmpty').hidden = !!p; $('detailBody').hidden = !p;
   if (!p) return;
   $('detailTitle').textContent = p.title;
-  $('detailMeta').textContent = `사용 ${p.useCount}회 · 최근 복사 ${fmtTime(p.lastUsedAt)}`;
+  $('detailMeta').textContent = t('cardUse', { n: p.useCount }) + ' · ' + t('cardLast', { t: fmtTime(p.lastUsedAt) });
   const fb = $('favBtn');
-  fb.textContent = p.favorite ? '★ 즐겨찾기 해제' : '☆ 즐겨찾기';
+  fb.textContent = p.favorite ? t('favRemove') : t('favAdd');
   fb.setAttribute('aria-pressed', String(!!p.favorite));
   const tg = $('detailTags'); tg.textContent = '';
-  if (p.demo) tg.append(el('span', { class: 'chip demo', text: '예시 데이터' }));
-  (p.tags || []).forEach((t) => tg.append(tagFilterBtn(t)));
+  if (p.demo) tg.append(el('span', { class: 'chip demo', text: t('demoTag') }));
+  (p.tags || []).forEach((x) => tg.append(tagFilterBtn(x)));
   highlight($('rawBody'), p.body, null);
 
   const vars = extractVariables(p.body);
@@ -227,10 +228,10 @@ function renderDetail() {
     if (!names.length) return;
     const grid = el('div', { class: 'fgrid' });
     for (const name of names) grid.append(fieldFor(name, idx++, p));
-    form.append(el('fieldset', { class: 'fgroup' }, el('legend', { text: `${title} · ${names.length}개` }), grid));
+    form.append(el('fieldset', { class: 'fgroup' }, el('legend', { text: `${title} · ${t('varsCount', { n: names.length })}` }), grid));
   };
-  group(multi ? '기본값이 있는 변수' : '변수', withDef);
-  group(multi ? '직접 입력할 변수' : '변수', rest);
+  group(multi ? t('varsDefault') : t('varsAll'), withDef);
+  group(multi ? t('varsInput') : t('varsAll'), rest);
 
   renderPreview();
   renderRuns(p);
@@ -241,7 +242,7 @@ function renderPreview() {
   highlight($('preview'), p.body, state.values);
   const s = textStats(renderTemplate(p.body, state.values));
   const blanks = extractVariables(p.body).filter((n) => !(typeof state.values[n] === 'string' && state.values[n] !== '')).length;
-  $('countInfo').textContent = `${fmtNum(s.chars)}자 · 약 ${fmtNum(s.tokens)} 토큰 (추정)` + (blanks ? ` · 빈칸 ${blanks}개` : '');
+  $('countInfo').textContent = t('countInfo', { chars: fmtNum(s.chars), tok: fmtNum(s.tokens) }) + (blanks ? t('blanks', { n: blanks }) : '');
 }
 
 /* test-run notes */
@@ -254,7 +255,7 @@ function renderRuns(p) {
       el('div', { class: 'run-head' }, el('strong', { text: r.model }), el('span', { class: 'muted', text: fmtTime(r.at) })),
       el('pre', { class: 'code run-result', text: r.result }),
       el('div', { class: 'run-actions' },
-        el('button', { class: 'btn ghost sm', type: 'button', text: '이 기록 삭제', onclick: () => deleteRun(r.id) }))));
+        el('button', { class: 'btn ghost sm', type: 'button', text: t('runDelete'), onclick: () => deleteRun(r.id) }))));
   }
 }
 function addRun(e) {
@@ -262,24 +263,24 @@ function addRun(e) {
   const p = current(); if (!p) return;
   const r = addTestRun(p.testRuns || [], { model: $('runModel').value, result: $('runResult').value }, Date.now(), uid());
   $('runErr').textContent = r.error;
-  if (!r.ok) { (r.error.includes('모델') ? $('runModel') : $('runResult')).focus(); return; }
+  if (!r.ok) { (r.error === t('errModelEmpty') || r.error === t('errModelLong') ? $('runModel') : $('runResult')).focus(); return; }
   p.testRuns = r.runs; save(); $('runResult').value = ''; render();
-  toast('테스트 기록을 저장했어요.');
+  toast(t('toastRunSaved'));
 }
 function deleteRun(id) {
   const p = current(); if (!p) return;
-  p.testRuns = removeTestRun(p.testRuns || [], id); save(); render(); focusEl('#runModel'); toast('기록을 삭제했어요.');
+  p.testRuns = removeTestRun(p.testRuns || [], id); save(); render(); focusEl('#runModel'); toast(t('toastRunDel'));
 }
 
 /* version history */
 function versionOptions(p) {
-  const opts = [['cur', '현재 버전']];
-  (p.history || []).forEach((h, i) => opts.push([String(i), `${i + 1}번째 이전 · ${fmtTime(h.savedAt)}`]));
+  const opts = [['cur', t('verCur')]];
+  (p.history || []).forEach((h, i) => opts.push([String(i), t('verNth', { n: i + 1, t: fmtTime(h.savedAt) })]));
   return opts;
 }
 function fillSelect(sel, opts, wanted, fallback) {
   sel.textContent = '';
-  for (const [v, t] of opts) sel.append(el('option', { value: v, text: t }));
+  for (const [v, tx] of opts) sel.append(el('option', { value: v, text: tx }));
   sel.value = opts.some(([v]) => v === wanted) ? wanted : fallback;
   return sel.value;
 }
@@ -311,7 +312,7 @@ function renderDiff(p) {
     const mark = ln.type === 'add' ? '+ ' : ln.type === 'del' ? '- ' : '  ';
     out.append(el('span', { class: 'dl ' + ln.type, text: mark + ln.text }));
   }
-  sum.textContent = add === 0 && del === 0 ? '두 버전의 내용이 같아요.' : `추가 ${add}줄 · 삭제 ${del}줄 (A → B)`;
+  sum.textContent = add === 0 && del === 0 ? t('diffSame') : t('diffSum', { add, del });
 }
 function refreshDiff() {
   const p = current(); if (p) renderDiff(p);
@@ -323,7 +324,7 @@ function restoreSelected() {
   Object.assign(p, r);
   state.values = defaultsOf(p); state.diff = { a: '0', b: 'cur' };
   save(); render(); focusEl('#diffA');
-  toast('이 버전으로 복원했어요. 바꾸기 전 내용은 버전 기록에 남아 있어요.');
+  toast(t('toastRestored'));
 }
 
 /* copy */
@@ -344,23 +345,23 @@ async function copyText(text) {
 async function doCopy() {
   const p = current(); if (!p) return;
   const ok = await copyText(renderTemplate(p.body, state.values));
-  if (!ok) { toast('복사하지 못했어요. 미리보기를 직접 선택해 복사해 주세요.', 'bad'); return; }
+  if (!ok) { toast(t('copyFail'), 'bad'); return; }
   p.useCount += 1; p.lastUsedAt = Date.now();
   const filled = {};
   for (const n of extractVariables(p.body)) if (typeof state.values[n] === 'string' && state.values[n] !== '') filled[n] = state.values[n];
   if (Object.keys(filled).length) { state.recent = rememberValues(state.recent, filled); saveRecent(); }
-  save(); toast('클립보드에 복사했어요!');
+  save(); toast(t('toastCopied'));
   const btn = $('copyBtn');
-  btn.textContent = '복사됨 ✓'; btn.classList.add('done');
-  setTimeout(() => { btn.textContent = '클립보드에 복사'; btn.classList.remove('done'); }, 1600);
+  btn.textContent = t('copiedBtn'); btn.classList.add('done');
+  setTimeout(() => { btn.textContent = t('copyBtn'); btn.classList.remove('done'); }, 1600);
   renderList(); renderTags();
-  $('detailMeta').textContent = `사용 ${p.useCount}회 · 최근 복사 ${fmtTime(p.lastUsedAt)}`;
+  $('detailMeta').textContent = t('cardUse', { n: p.useCount }) + ' · ' + t('cardLast', { t: fmtTime(p.lastUsedAt) });
 }
 
 /* modal */
 function openEdit(p) {
   state.editingId = p ? p.id : null;
-  $('modalTitle').textContent = p ? '프롬프트 수정' : '새 프롬프트';
+  $('modalTitle').textContent = p ? t('modalEdit') : t('modalNew');
   $('fTitle').value = p ? p.title : ''; $('fTags').value = p ? p.tags.join(', ') : ''; $('fBody').value = p ? p.body : '';
   $('fDefaults').value = p ? formatDefaults(p.defaults) : '';
   for (const id of ['eTitle', 'eTags', 'eBody']) $(id).textContent = '';
@@ -370,9 +371,9 @@ function openEdit(p) {
 function updateVarHint() {
   const body = $('fBody').value;
   const v = extractVariables(body);
-  $('varHint').textContent = v.length ? '감지된 변수: ' + v.map((x) => '{{' + x + '}}').join(', ') : '감지된 변수가 없어요.';
+  $('varHint').textContent = v.length ? t('varHint', { list: v.map((x) => '{{' + x + '}}').join(', ') }) : t('varHintNone');
   const s = textStats(body);
-  $('fCount').textContent = `${fmtNum(s.chars)}자 · 약 ${fmtNum(s.tokens)} 토큰 (추정)`;
+  $('fCount').textContent = t('fCount', { chars: fmtNum(s.chars), tok: fmtNum(s.tokens) });
 }
 function submitEdit(e) {
   e.preventDefault();
@@ -385,16 +386,16 @@ function submitEdit(e) {
   const fields = { title: data.title.trim(), body: data.body, tags, defaults };
   if (state.editingId) {
     const p = state.prompts.find((x) => x.id === state.editingId);
-    if (!p) { $('modal').close(); render(); toast('이미 삭제된 프롬프트예요.', 'bad'); return; }
+    if (!p) { $('modal').close(); render(); toast(t('toastBroken'), 'bad'); return; }
     const history = recordVersion(p, fields, now);
     Object.assign(p, fields, { history, updatedAt: now });
     state.values = defaultsOf(p);
     state.diff = { a: '0', b: 'cur' };
-    toast('수정했어요.');
+    toast(t('toastEdited'));
   } else {
     const p = { id: uid(), ...fields, favorite: false, useCount: 0, lastUsedAt: null, createdAt: now, updatedAt: now, demo: false, history: [], testRuns: [] };
     state.prompts.push(p); state.selected = p.id; state.values = defaultsOf(p);
-    toast('저장했어요.');
+    toast(t('toastSaved'));
   }
   save(); $('modal').close(); render();
   layout().classList.add('show-detail');
@@ -419,57 +420,57 @@ function download(name, type, text) {
 function exportJson() {
   download('prompt-vault-' + new Date().toISOString().slice(0, 10) + '.json', 'application/json',
     JSON.stringify({ app: 'prompt-vault', version: 1, exportedAt: new Date().toISOString(), prompts: state.prompts }, null, 2));
-  toast(`${state.prompts.length}개를 내보냈어요.`);
+  toast(t('toastExported', { n: state.prompts.length }));
 }
 function exportMarkdown() {
   const p = current(); if (!p) return;
   const base = p.title.replace(/[\\/:*?"<>|\r\n]+/g, '_').trim().slice(0, 40) || 'prompt';
   download(base + '.md', 'text/markdown;charset=utf-8', toMarkdown(p));
-  toast('Markdown 파일로 내보냈어요.');
+  toast(t('toastMd'));
 }
 function exportSelected() {
   const ids = new Set(state.checked);
   const list = state.prompts.filter((p) => ids.has(p.id));
-  if (!list.length) { toast('먼저 내보낼 프롬프트를 선택해 주세요.', 'bad'); return; }
-  download('prompt-vault-선택-' + new Date().toISOString().slice(0, 10) + '.json', 'application/json',
+  if (!list.length) { toast(t('exportNone'), 'bad'); return; }
+  download('prompt-vault-selected-' + new Date().toISOString().slice(0, 10) + '.json', 'application/json',
     JSON.stringify({ app: 'prompt-vault', version: 1, exportedAt: new Date().toISOString(), prompts: list }, null, 2));
-  toast(`선택한 ${list.length}개를 내보냈어요.`);
+  toast(t('toastExportSel', { n: list.length }));
 }
 async function importJson(file) {
   if (!file) return;
   let text;
-  try { text = await file.text(); } catch { toast('파일을 읽지 못했어요.', 'bad'); return; }
+  try { text = await file.text(); } catch { toast(t('fileRead'), 'bad'); return; }
   const r = parseExport(text);
   if (!r.ok) { toast(r.error, 'bad'); return; }
   const m = mergeImport(state.prompts, r.prompts);
   state.prompts = m.merged; save(); render();
-  toast(`가져오기 완료: ${m.added}개 추가, ${m.skipped}개 중복 건너뜀, ${r.invalid}개 형식 오류`);
+  toast(t('toastImportDone', { added: m.added, skipped: m.skipped, invalid: r.invalid }));
 }
 function addDemo() {
   const m = mergeImport(state.prompts, demoPrompts());
   state.prompts = m.merged; save(); render();
-  toast(m.added ? `예시 데이터 ${m.added}개를 추가했어요.` : '예시 데이터가 이미 있어요.');
+  toast(m.added ? t('toastDemoAdded', { n: m.added }) : t('toastDemoHave'));
 }
 function toggleFavorite() {
   const p = current(); if (!p) return;
   p.favorite = !p.favorite; save(); render();
-  toast(p.favorite ? '즐겨찾기에 추가했어요.' : '즐겨찾기를 해제했어요.');
+  toast(p.favorite ? t('toastFavOn') : t('toastFavOff'));
 }
 function duplicateCurrent() {
   const p = current(); if (!p) return;
   const copy = duplicatePrompt(p, { id: uid() });
   state.prompts.push(copy); state.selected = copy.id; state.values = defaultsOf(copy); state.diff = { a: '0', b: 'cur' };
   save(); render(); layout().classList.add('show-detail');
-  toast('사본을 만들었어요. 수정으로 이름을 바꿔 보세요.');
+  toast(t('toastDup'));
 }
 async function bulkDelete() {
   const ids = [...state.checked];
   if (!ids.length) return;
-  if (!(await ask('선택 삭제', `선택한 프롬프트 ${ids.length}개를 삭제할까요? 되돌릴 수 없어요.`, '삭제'))) return;
+  if (!(await ask(t('bulkDelTitle'), t('bulkDelMsg', { n: ids.length }), t('bulkDelOk')))) return;
   state.prompts = removeByIds(state.prompts, ids);
   if (ids.includes(state.selected)) state.selected = null;
   state.checked.clear(); state.bulk = false;
-  save(); render(); focusEl('#listTitle'); toast(`${ids.length}개를 삭제했어요.`);
+  save(); render(); focusEl('#listTitle'); toast(t('toastBulkDeleted', { n: ids.length }));
 }
 
 function render() {
@@ -481,12 +482,12 @@ function render() {
 
 /* theme */
 function currentTheme() {
-  const t = document.documentElement.getAttribute('data-theme');
-  if (t) return t;
+  const th = document.documentElement.getAttribute('data-theme');
+  if (th) return th;
   return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 function syncThemeBtn() {
-  $('themeBtn').textContent = currentTheme() === 'dark' ? '라이트 모드' : '다크 모드';
+  $('themeBtn').textContent = currentTheme() === 'dark' ? t('themeLight') : t('themeDark');
 }
 function toggleTheme() {
   const next = currentTheme() === 'dark' ? 'light' : 'dark';
@@ -495,11 +496,23 @@ function toggleTheme() {
   try { localStorage.setItem('pv-theme', next); } catch {}
 }
 
+/* language */
+function applyLanguage(code) {
+  setLang(code);
+  saveLang(code);
+  applyI18n();
+  document.title = t('docTitle');
+  document.querySelector('meta[name="description"]').setAttribute('content', t('metaDesc'));
+  $('langSelect').value = getLang();
+  syncThemeBtn();
+  render();
+}
+
 /* keyboard shortcuts (ignored while typing or while a dialog is open) */
 function onGlobalKey(e) {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  const t = e.target;
-  if (t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
+  const tg = e.target;
+  if (tg && (tg.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(tg.tagName))) return;
   if (document.querySelector('dialog[open]')) return;
   if (e.key === '/') {
     e.preventDefault();
@@ -515,6 +528,16 @@ function onGlobalKey(e) {
 }
 
 /* wiring */
+setLang(detectLang(readSavedLang()));
+{
+  const sel = $('langSelect');
+  sel.replaceChildren(...Object.entries(LANGS).map(([k, v]) => el('option', { value: k, text: v.name })));
+  sel.value = getLang();
+  sel.addEventListener('change', (e) => applyLanguage(e.target.value));
+}
+applyI18n();
+document.title = t('docTitle');
+document.querySelector('meta[name="description"]').setAttribute('content', t('metaDesc'));
 state.prompts = load();
 state.recent = loadRecent();
 $('themeBtn').addEventListener('click', toggleTheme);
@@ -556,19 +579,19 @@ $('restoreBtn').addEventListener('click', restoreSelected);
 $('backBtn').addEventListener('click', () => { layout().classList.remove('show-detail'); window.scrollTo({ top: 0 }); });
 $('delBtn').addEventListener('click', async () => {
   const p = current(); if (!p) return;
-  if (!(await ask('프롬프트 삭제', `"${p.title}"을(를) 삭제할까요?`, '삭제'))) return;
+  if (!(await ask(t('delTitle'), t('delMsg', { title: p.title }), t('delOk')))) return;
   state.prompts = state.prompts.filter((x) => x.id !== p.id); state.selected = null; state.checked.delete(p.id);
-  save(); render(); focusEl('#listTitle'); toast('삭제했어요.');
+  save(); render(); focusEl('#listTitle'); toast(t('toastDeleted'));
 });
 $('clearBtn').addEventListener('click', async () => {
-  if (!state.prompts.length) { toast('삭제할 프롬프트가 없어요.', 'bad'); return; }
-  if (!(await ask('전체 삭제', `프롬프트 ${state.prompts.length}개를 모두 삭제할까요? 되돌릴 수 없어요.`, '모두 삭제'))) return;
+  if (!state.prompts.length) { toast(t('toastClearNone'), 'bad'); return; }
+  if (!(await ask(t('clearTitle'), t('clearMsg', { n: state.prompts.length }), t('clearOk')))) return;
   state.prompts = []; state.selected = null; state.tag = ''; state.fav = false; state.checked.clear(); state.bulk = false;
-  save(); render(); focusEl('#listTitle'); toast('모두 삭제했어요.');
+  save(); render(); focusEl('#listTitle'); toast(t('toastCleared'));
 });
 $('exportBtn').addEventListener('click', exportJson);
 $('clearRecentBtn').addEventListener('click', () => {
-  state.recent = {}; saveRecent(); renderDetail(); toast('최근 입력값을 지웠어요.');
+  state.recent = {}; saveRecent(); renderDetail(); toast(t('toastRecentCleared'));
 });
 $('importBtn').addEventListener('click', () => $('importFile').click());
 $('importFile').addEventListener('change', (e) => { importJson(e.target.files[0]); e.target.value = ''; });

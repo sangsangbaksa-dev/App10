@@ -1,4 +1,5 @@
-// Pure logic — no DOM.
+// Pure logic — no DOM. User-facing text comes from i18n.js (t).
+import { t } from './i18n.js';
 export const LIMITS = { title: 80, body: 8000, tag: 24, tags: 12, defaultValue: 500, versions: 5, runs: 20, model: 40, result: 2000 };
 
 const VAR_RE = /\{\{([^{}]+?)\}\}/g;
@@ -73,13 +74,13 @@ export function validatePrompt({ title, body, tags } = {}) {
   const errors = {};
   const ti = String(title ?? '').trim();
   const bo = String(body ?? '').trim();
-  if (!ti) errors.title = '제목을 입력해 주세요.';
-  else if (ti.length > LIMITS.title) errors.title = `제목은 ${LIMITS.title}자 이하여야 해요.`;
-  if (!bo) errors.body = '본문을 입력해 주세요.';
-  else if (bo.length > LIMITS.body) errors.body = `본문은 ${LIMITS.body}자 이하여야 해요.`;
+  if (!ti) errors.title = t('errTitleEmpty');
+  else if (ti.length > LIMITS.title) errors.title = t('errTitleLong', { max: LIMITS.title });
+  if (!bo) errors.body = t('errBodyEmpty');
+  else if (bo.length > LIMITS.body) errors.body = t('errBodyLong', { max: LIMITS.body });
   const tg = normalizeTags(tags);
-  if (tg.length > LIMITS.tags) errors.tags = `태그는 최대 ${LIMITS.tags}개까지 가능해요.`;
-  else if (tg.some((x) => x.length > LIMITS.tag)) errors.tags = `태그는 ${LIMITS.tag}자 이하여야 해요.`;
+  if (tg.length > LIMITS.tags) errors.tags = t('errTagsMax', { max: LIMITS.tags });
+  else if (tg.some((x) => x.length > LIMITS.tag)) errors.tags = t('errTagLong', { max: LIMITS.tag });
   return { ok: Object.keys(errors).length === 0, errors };
 }
 
@@ -184,10 +185,10 @@ export function addTestRun(runs, { model, result } = {}, now = Date.now(), id) {
   const current = Array.isArray(runs) ? runs : [];
   const mo = String(model ?? '').trim();
   const re = String(result ?? '').trim();
-  if (!mo) return { ok: false, error: '모델 이름을 입력해 주세요.', runs: current };
-  if (mo.length > LIMITS.model) return { ok: false, error: `모델 이름은 ${LIMITS.model}자 이하여야 해요.`, runs: current };
-  if (!re) return { ok: false, error: '결과를 입력해 주세요.', runs: current };
-  if (re.length > LIMITS.result) return { ok: false, error: `결과는 ${LIMITS.result}자 이하여야 해요.`, runs: current };
+  if (!mo) return { ok: false, error: t('errModelEmpty'), runs: current };
+  if (mo.length > LIMITS.model) return { ok: false, error: t('errModelLong', { max: LIMITS.model }), runs: current };
+  if (!re) return { ok: false, error: t('errResultEmpty'), runs: current };
+  if (re.length > LIMITS.result) return { ok: false, error: t('errResultLong', { max: LIMITS.result }), runs: current };
   const entry = { id: id || 'r-' + now.toString(36) + Math.random().toString(36).slice(2, 8), model: mo, result: re, at: now };
   return { ok: true, error: '', runs: [entry, ...current].slice(0, LIMITS.runs) };
 }
@@ -250,9 +251,9 @@ function sanitizePrompt(p) {
 
 export function parseExport(text) {
   let data;
-  try { data = JSON.parse(text); } catch { return { ok: false, error: 'JSON 형식이 올바르지 않아요.', prompts: [] }; }
+  try { data = JSON.parse(text); } catch { return { ok: false, error: t('errJsonFormat'), prompts: [] }; }
   const list = Array.isArray(data) ? data : data && Array.isArray(data.prompts) ? data.prompts : null;
-  if (!list) return { ok: false, error: '프롬프트 목록을 찾을 수 없어요.', prompts: [] };
+  if (!list) return { ok: false, error: t('errNoList'), prompts: [] };
   const prompts = [];
   let invalid = 0;
   for (const item of list) {
@@ -277,7 +278,7 @@ export function mergeImport(existing, incoming) {
 
 /** Copy of a prompt as a new, unused entry (no history, no test runs). The caller supplies the id. */
 export function duplicatePrompt(p, { id, now = Date.now() } = {}) {
-  const suffix = ' (사본)';
+  const suffix = t('copySuffix');
   const base = String(p.title ?? '').trim().slice(0, LIMITS.title - suffix.length);
   return {
     id: id || 'd-' + now.toString(36) + Math.random().toString(36).slice(2, 8),
@@ -298,16 +299,16 @@ export function duplicatePrompt(p, { id, now = Date.now() } = {}) {
 
 /** Markdown document for one prompt: title, tags, body, and variable list with defaults. */
 export function toMarkdown(p) {
-  const title = String(p.title ?? '').trim() || '제목 없음';
+  const title = String(p.title ?? '').trim() || t('mdNoTitle');
   const tags = (p.tags || []).map((t) => '#' + t).join(' ');
   const names = extractVariables(p.body);
   const defaults = cleanDefaults(p.defaults);
   const lines = ['# ' + title, ''];
-  if (tags) lines.push('태그: ' + tags, '');
-  lines.push('## 프롬프트', '', String(p.body ?? ''), '');
+  if (tags) lines.push(t('mdTags') + tags, '');
+  lines.push(t('mdPrompt'), '', String(p.body ?? ''), '');
   if (names.length) {
-    lines.push('## 변수', '');
-    for (const n of names) lines.push('- `{{' + n + '}}`' + (defaults[n] ? ` (기본값: ${defaults[n]})` : ''));
+    lines.push(t('mdVars'), '');
+    for (const n of names) lines.push('- `{{' + n + '}}`' + (defaults[n] ? t('mdDefault', { v: defaults[n] }) : ''));
     lines.push('');
   }
   return lines.join('\n');
@@ -319,17 +320,25 @@ export function removeByIds(prompts, ids) {
 }
 
 export function demoPrompts(now = Date.now()) {
-  const mk = (i, title, tags, body, defaults = {}) => ({
-    id: 'demo-' + i, title, tags, body, useCount: 0, lastUsedAt: null,
-    createdAt: now - i * 60000, updatedAt: now - i * 60000, demo: true, favorite: i === 1, defaults,
-  });
-  return [
-    mk(1, '블로그 글 개요 짜기', ['글쓰기', '블로그'], '당신은 경력 10년차 콘텐츠 에디터입니다.\n주제: {{주제}}\n독자: {{독자}}\n\n위 주제로 블로그 글 개요를 작성해 주세요. 제목 후보 3개, 소제목 5개, 각 소제목별 핵심 문장을 포함해 주세요. 톤은 {{톤}}으로 해 주세요.', { 톤: '친근하게' }),
-    mk(2, '코드 리뷰 요청', ['개발', '리뷰'], '아래 {{언어}} 코드를 리뷰해 주세요. 버그, 가독성, 성능, 보안 순서로 짚어 주고 개선된 코드를 제시해 주세요.\n\n```\n{{코드}}\n```', { 언어: 'JavaScript' }),
-    mk(3, '이메일 답장 작성', ['업무', '이메일'], '{{받는사람}}님께 보낼 답장을 작성해 주세요.\n받은 메일 요약: {{받은내용}}\n내가 전달할 핵심: {{핵심메시지}}\n정중하지만 간결하게, 3문단 이내로 부탁해요.'),
-    mk(4, '회의록 요약', ['업무', '요약'], '다음 회의 내용을 결정사항, 할 일(담당자/기한), 미결 이슈로 나눠 요약해 주세요.\n\n{{회의내용}}'),
-    mk(5, '영어 문장 교정', ['학습', '영어'], '다음 영어 문장을 {{레벨}} 수준에 맞게 자연스럽게 고치고, 바뀐 이유를 한국어로 설명해 주세요.\n\n{{문장}}', { 레벨: '중급' }),
-  ];
+  const bodies = [t('demoBody1'), t('demoBody2'), t('demoBody3'), t('demoBody4'), t('demoBody5')];
+  const titles = [t('demoTitle1'), t('demoTitle2'), t('demoTitle3'), t('demoTitle4'), t('demoTitle5')];
+  const tagLists = [t('demoTags1'), t('demoTags2'), t('demoTags3'), t('demoTags4'), t('demoTags5')];
+  // Each sample sets a default for one named variable: [index of prompt, variable position, value].
+  const defaultRules = [[0, 2, t('demoTone')], [1, 0, t('demoLang')], [4, 0, t('demoLevel')]];
+  const mk = (i) => {
+    const body = bodies[i];
+    const defaults = {};
+    for (const [pi, pos, val] of defaultRules) {
+      if (pi !== i) continue;
+      const name = extractVariables(body)[pos];
+      if (name) defaults[name] = val;
+    }
+    return {
+      id: 'demo-' + (i + 1), title: titles[i], tags: normalizeTags(tagLists[i]), body, useCount: 0, lastUsedAt: null,
+      createdAt: now - (i + 1) * 60000, updatedAt: now - (i + 1) * 60000, demo: true, favorite: i === 0, defaults,
+    };
+  };
+  return [0, 1, 2, 3, 4].map(mk);
 }
 
 /* ---------- recent values per variable (per-browser convenience, separate storage key) ---------- */
