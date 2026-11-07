@@ -12,24 +12,38 @@
 <body>
 <a class="skip" href="#main">본문으로 건너뛰기</a>
 <header class="hero">
-  <div class="orb orb-1" aria-hidden="true"></div>
-  <div class="orb orb-2" aria-hidden="true"></div>
-  <div class="grid-bg" aria-hidden="true"></div>
-  <div class="wrap hero-inner">
+  <div class="wrap">
     <div class="topbar">
-      <span class="brand"><span class="logo" aria-hidden="true">{{ }}</span>프롬프트 보관함</span>
-      <div class="topbar-actions">
-        <button id="helpBtn" class="btn ghost sm" type="button" aria-haspopup="dialog">단축키 ?</button>
-        <button id="themeBtn" class="btn ghost sm" type="button">다크 모드</button>
+      <span class="brand"><span class="logo" aria-hidden="true">{ }</span>프롬프트 보관함</span>
+      <div class="topbar-actions"><button id="helpBtn" class="btn ghost sm" type="button" aria-haspopup="dialog">단축키 ?</button><button id="themeBtn" class="btn ghost sm" type="button">다크 모드</button></div>
+    </div>
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <h1>자주 쓰는 프롬프트를<br>빈칸만 채워 바로 복사</h1>
+        <p class="lead">{{변수}}로 비워 둔 자리에 값을 넣으면 완성된 프롬프트가 실시간으로 만들어져요. 복사할 때마다 사용 횟수가 기록돼요.</p>
+        <div class="hero-actions">
+          <button id="newBtn" class="btn primary" type="button">새 프롬프트</button>
+          <button id="demoBtn" class="btn ghost" type="button">예시 데이터 불러오기</button>
+        </div>
+        <p class="stats" id="stats" aria-live="polite"></p>
+      </div>
+      <div class="mock" aria-hidden="true">
+        <div class="mock-bar"><i></i><i></i><i></i><b>블로그 글 개요 짜기</b></div>
+        <div class="mock-body">
+          <div class="mock-list">
+            <div class="mock-item on"><b>블로그 글 개요 짜기</b><span>#글쓰기 #블로그</span></div>
+            <div class="mock-item"><b>코드 리뷰 요청</b><span>#개발 #리뷰</span></div>
+            <div class="mock-item"><b>이메일 답장 작성</b><span>#업무 #이메일</span></div>
+          </div>
+          <div class="mock-main">
+            <div class="mock-field"><span>주제</span><em>AI 도구 입문</em></div>
+            <div class="mock-field"><span>독자</span><em class="todo">{{독자}}</em></div>
+            <p class="mock-text">당신은 경력 10년차 콘텐츠 에디터입니다. 주제: <mark>AI 도구 입문</mark> 독자: <mark class="todo">{{독자}}</mark></p>
+          </div>
+        </div>
+        <div class="mock-foot"><span>남은 빈칸 1개</span><span class="mock-copy">클립보드에 복사</span></div>
       </div>
     </div>
-    <h1>자주 쓰는 프롬프트,<br><span class="grad">빈칸만 채워 바로 복사</span></h1>
-    <p class="lead">{{변수}}로 비워 둔 자리에 값을 넣으면 완성된 프롬프트가 실시간으로 만들어져요.</p>
-    <div class="hero-actions">
-      <button id="newBtn" class="btn primary" type="button">새 프롬프트</button>
-      <button id="demoBtn" class="btn ghost" type="button">예시 데이터 불러오기</button>
-    </div>
-    <p class="stats" id="stats" aria-live="polite"></p>
   </div>
 </header>
 
@@ -78,6 +92,7 @@
     <div class="tools">
       <button id="bulkToggle" class="btn ghost sm" type="button" aria-pressed="false">여러 개 선택</button>
       <button id="exportBtn" class="btn ghost sm" type="button">JSON 내보내기</button>
+      <button id="clearRecentBtn" class="btn ghost sm" type="button">입력 기억 지우기</button>
       <button id="importBtn" class="btn ghost sm" type="button">JSON 가져오기</button>
       <button id="clearBtn" class="btn danger sm" type="button">전체 삭제</button>
       <input id="importFile" type="file" accept="application/json,.json" hidden>

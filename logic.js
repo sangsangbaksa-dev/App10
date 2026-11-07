@@ -331,3 +331,56 @@ export function demoPrompts(now = Date.now()) {
     mk(5, '영어 문장 교정', ['학습', '영어'], '다음 영어 문장을 {{레벨}} 수준에 맞게 자연스럽게 고치고, 바뀐 이유를 한국어로 설명해 주세요.\n\n{{문장}}', { 레벨: '중급' }),
   ];
 }
+
+/* ---------- recent values per variable (per-browser convenience, separate storage key) ---------- */
+export const RECENT = { perVar: 5, shown: 3, maxLen: 200 };
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+
+/** Most-recent-first list with `value` at the front. Empty, multi-line or overlong values are ignored. */
+export function pushRecentValue(list, value, limit = RECENT.perVar) {
+  const base = Array.isArray(list) ? list.filter((x) => typeof x === 'string') : [];
+  const v = typeof value === 'string' ? value.trim() : '';
+  if (!v || v.includes('\n') || v.length > RECENT.maxLen) return base.slice(0, limit);
+  return [v, ...base.filter((x) => x !== v)].slice(0, limit);
+}
+
+/** Clean an untrusted parsed object into { name: [values] }. Drops unsafe keys and bad entries. */
+export function sanitizeRecent(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const name of Object.keys(raw)) {
+    if (UNSAFE_KEYS.has(name) || !name.trim()) continue;
+    const list = Array.isArray(raw[name]) ? raw[name] : [];
+    const clean = [];
+    for (const item of list) {
+      if (typeof item !== 'string') continue;
+      const v = item.trim();
+      if (!v || v.includes('\n') || v.length > RECENT.maxLen || clean.includes(v)) continue;
+      clean.push(v);
+    }
+    if (clean.length) out[name] = clean.slice(0, RECENT.perVar);
+  }
+  return out;
+}
+
+export function parseRecent(text) {
+  try { return sanitizeRecent(JSON.parse(text)); } catch { return {}; }
+}
+
+/** Values to offer as quick picks for one variable. */
+export function suggestionsFor(store, name, limit = RECENT.shown) {
+  if (!store || !hasOwn(store, name) || !Array.isArray(store[name])) return [];
+  return store[name].slice(0, limit);
+}
+
+/** New store with the given name -> value pairs recorded at the front. Does not mutate `store`. */
+export function rememberValues(store, values = {}) {
+  const next = sanitizeRecent(store);
+  for (const name of Object.keys(values || {})) {
+    if (UNSAFE_KEYS.has(name) || !name.trim()) continue;
+    const list = pushRecentValue(hasOwn(next, name) ? next[name] : [], values[name], RECENT.perVar);
+    if (list.length) next[name] = list;
+  }
+  return next;
+}

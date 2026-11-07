@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractVariables, renderTemplate, normalizeTags, searchPrompts, sortPrompts, validatePrompt, mergeImport, parseExport, demoPrompts, textStats, parseDefaults, formatDefaults, duplicatePrompt, toMarkdown, removeByIds, recordVersion, restoreVersion, diffLines, addTestRun, removeTestRun, LIMITS } from '../logic.js';
+import { extractVariables, renderTemplate, normalizeTags, searchPrompts, sortPrompts, validatePrompt, mergeImport, parseExport, demoPrompts, textStats, parseDefaults, formatDefaults, duplicatePrompt, toMarkdown, removeByIds, recordVersion, restoreVersion, diffLines, addTestRun, removeTestRun, LIMITS, pushRecentValue, sanitizeRecent, parseRecent, rememberValues, suggestionsFor } from '../logic.js';
 
 test('extractVariables: unique, in order', () => {
   assert.deepEqual(extractVariables('{{a}} {{b}} {{a}} {{c}}'), ['a', 'b', 'c']);
@@ -225,4 +225,38 @@ test('parseExport keeps history and testRuns, drops malformed entries', () => {
   const old = parseExport(JSON.stringify([{ id: 'o', title: 'T', body: 'B' }])).prompts[0];
   assert.deepEqual(old.history, []);
   assert.deepEqual(old.testRuns, []);
+});
+
+test('pushRecentValue: newest first, no duplicates, capped, ignores bad input', () => {
+  assert.deepEqual(pushRecentValue(['a', 'b'], ' c '), ['c', 'a', 'b']);
+  assert.deepEqual(pushRecentValue(['a', 'b', 'c'], 'b'), ['b', 'a', 'c']);
+  assert.deepEqual(pushRecentValue(['a', 'b'], ''), ['a', 'b']);
+  assert.deepEqual(pushRecentValue(['a'], 'x\ny'), ['a']);
+  assert.deepEqual(pushRecentValue(['a'], 'x'.repeat(201)), ['a']);
+  assert.deepEqual(pushRecentValue(['1', '2', '3', '4', '5'], '6'), ['6', '1', '2', '3', '4']);
+  assert.deepEqual(pushRecentValue(null, 'z'), ['z']);
+});
+test('sanitizeRecent / parseRecent drop unsafe keys and bad entries', () => {
+  const raw = JSON.stringify({ 주제: ['a', ' a ', 3, '', 'x\ny', 'b'], '': ['q'], __proto__: ['p'], bad: 'str' });
+  const r = parseRecent(raw);
+  assert.deepEqual(r, { 주제: ['a', 'b'] });
+  assert.equal(Object.getPrototypeOf(r), Object.prototype);
+  assert.deepEqual(parseRecent('{not json'), {});
+  assert.deepEqual(parseRecent('[1,2]'), {});
+  assert.deepEqual(sanitizeRecent(null), {});
+});
+test('rememberValues: records per variable, returns a new object, safe with __proto__', () => {
+  const before = { a: ['old'] };
+  const next = rememberValues(before, { a: 'new', b: 'first', __proto__: 'evil', '': 'x' });
+  assert.deepEqual(next, { a: ['new', 'old'], b: ['first'] });
+  assert.deepEqual(before, { a: ['old'] });
+  assert.equal(Object.getPrototypeOf(next), Object.prototype);
+  assert.deepEqual(rememberValues({}, { a: '' }), {});
+});
+test('suggestionsFor: only own keys, limited', () => {
+  const store = { a: ['1', '2', '3', '4'] };
+  assert.deepEqual(suggestionsFor(store, 'a'), ['1', '2', '3']);
+  assert.deepEqual(suggestionsFor(store, 'toString'), []);
+  assert.deepEqual(suggestionsFor(store, 'b'), []);
+  assert.deepEqual(suggestionsFor(null, 'a'), []);
 });

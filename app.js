@@ -2,7 +2,7 @@ import {
   extractVariables, renderTemplate, normalizeTags, searchPrompts, sortPrompts, validatePrompt,
   mergeImport, parseExport, demoPrompts, textStats, duplicatePrompt, toMarkdown,
   parseDefaults, formatDefaults, removeByIds, recordVersion, restoreVersion, diffLines,
-  addTestRun, removeTestRun,
+  addTestRun, removeTestRun, rememberValues, parseRecent, suggestionsFor, RECENT,
 } from './logic.js';
 
 const KEY = 'pv-prompts-v1';
@@ -21,12 +21,13 @@ const fmtNum = (n) => n.toLocaleString('ko-KR');
 
 const state = {
   prompts: [], q: '', tag: '', fav: false, sort: 'recent', selected: null, values: {},
-  editingId: null, storageOk: true, bulk: false, checked: new Set(), visible: [],
+  editingId: null, storageOk: true, bulk: false, checked: new Set(), visible: [], recent: {},
   diff: { a: '0', b: 'cur' },
 };
 
 /* storage */
 const BACKUP_KEY = KEY + '-backup';
+const RECENT_KEY = 'pv-recent-values-v1'; // per-browser quick picks, separate from prompt data
 function load() {
   let raw;
   try { raw = localStorage.getItem(KEY); } catch { state.storageOk = false; return []; }
@@ -172,15 +173,34 @@ function select(id, scroll) {
   layout().classList.add('show-detail');
   if (scroll) { const d = $('detail'); d.scrollIntoView({ block: 'start' }); d.focus({ preventScroll: true }); }
 }
+function loadRecent() {
+  try { return parseRecent(localStorage.getItem(RECENT_KEY) || 'null'); } catch { return {}; }
+}
+function saveRecent() {
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(state.recent)); } catch {}
+}
 function fieldFor(name, i, p) {
   const long = name.length > 12 || /내용|코드|본문|설명/.test(name);
   const id = 'var-' + i;
   const input = long ? el('textarea', { id, rows: '3' }) : el('input', { id, type: 'text' });
   input.value = typeof state.values[name] === 'string' ? state.values[name] : '';
   input.addEventListener('input', () => { state.values[name] = input.value; renderPreview(); });
-  return el('label', { class: 'field' + (long ? ' wide' : ''), for: id },
+  const label = el('label', { class: 'field', for: id },
     el('span', { class: 'flabel' }, name, hasDefault(p, name) ? el('span', { class: 'badge', text: '기본값' }) : null),
     input);
+  const wrap = el('div', { class: 'fwrap' + (long ? ' wide' : '') }, label);
+  const picks = suggestionsFor(state.recent, name, RECENT.shown);
+  if (picks.length) {
+    const row = el('div', { class: 'qpicks', role: 'group', 'aria-label': `${name} 최근 입력값` });
+    row.append(el('span', { class: 'qpicks-label', text: '최근' }));
+    for (const v of picks) {
+      row.append(el('button', { class: 'qpick', type: 'button', title: `"${v}" 넣기`,
+        'aria-label': `최근 입력값 ${v} 넣기`, text: v.length > 24 ? v.slice(0, 24) + '…' : v,
+        onclick: () => { input.value = v; state.values[name] = v; renderPreview(); input.focus(); } }));
+    }
+    wrap.append(row);
+  }
+  return wrap;
 }
 function renderDetail() {
   const p = current();
@@ -326,6 +346,9 @@ async function doCopy() {
   const ok = await copyText(renderTemplate(p.body, state.values));
   if (!ok) { toast('복사하지 못했어요. 미리보기를 직접 선택해 복사해 주세요.', 'bad'); return; }
   p.useCount += 1; p.lastUsedAt = Date.now();
+  const filled = {};
+  for (const n of extractVariables(p.body)) if (typeof state.values[n] === 'string' && state.values[n] !== '') filled[n] = state.values[n];
+  if (Object.keys(filled).length) { state.recent = rememberValues(state.recent, filled); saveRecent(); }
   save(); toast('클립보드에 복사했어요!');
   const btn = $('copyBtn');
   btn.textContent = '복사됨 ✓'; btn.classList.add('done');
@@ -493,6 +516,7 @@ function onGlobalKey(e) {
 
 /* wiring */
 state.prompts = load();
+state.recent = loadRecent();
 $('themeBtn').addEventListener('click', toggleTheme);
 $('helpBtn').addEventListener('click', () => $('helpDialog').showModal());
 if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncThemeBtn);
@@ -543,6 +567,9 @@ $('clearBtn').addEventListener('click', async () => {
   save(); render(); focusEl('#listTitle'); toast('모두 삭제했어요.');
 });
 $('exportBtn').addEventListener('click', exportJson);
+$('clearRecentBtn').addEventListener('click', () => {
+  state.recent = {}; saveRecent(); renderDetail(); toast('최근 입력값을 지웠어요.');
+});
 $('importBtn').addEventListener('click', () => $('importFile').click());
 $('importFile').addEventListener('change', (e) => { importJson(e.target.files[0]); e.target.value = ''; });
 document.addEventListener('keydown', onGlobalKey);
